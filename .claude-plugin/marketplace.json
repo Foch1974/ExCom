@@ -1,0 +1,14 @@
+{
+  "name": "excom-marketplace",
+  "owner": {
+    "name": "ExCom Contributors"
+  },
+  "plugins": [
+    {
+      "name": "excom",
+      "source": "./",
+      "description": "Multi-agent Executive Committee (CEO + 3 Wildcards + 20 C-Suite Directors + PMO) for corporate and life decisions.",
+      "version": "1.0.0"
+    }
+  ]
+}

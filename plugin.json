@@ -1,0 +1,12 @@
+{
+  "name": "excom",
+  "displayName": "ExCom",
+  "version": "1.0.0",
+  "description": "Multi-agent Executive Committee (CEO + Devil's Advocate, Outsider, Optimist + 20 C-Suite Directors + PMO) for high-stakes business and personal life decisions.",
+  "logo": "assets/logo.svg",
+  "suggestedPrompts": [
+    "Convene the ExCom to evaluate launching a B2B AI SaaS vs offering high-ticket advisory first",
+    "Run an ExCom session on buying a primary residence vs renting and investing our capital over 10 years",
+    "Stress-test a major career pivot with the ExCom before we decide whether to hand off to the PMO"
+  ]
+}
