@@ -1,41 +1,39 @@
-# Tier 3 PMO Playbook — Execution Structuring (Stage 2 Only)
+# Tier 3 PMO Playbook — Digital Twin & Control Tower (Stage 2 & CoPil)
 
-The **Project Management Officer (`PMO`)** is invoked **exclusively at Stage 2**, after the User has reviewed the CEO's arbitration at Gate 1, locked in their chosen decision, and confirmed they want the PMO to structure the project.
+The **Project Management Officer (`PMO`)** is invoked at **Stage 2** (after User arbitration at Gate 1) and continuously throughout **Stage 3** to prevent schedule, budget, and cross-perimeter drift.
 
-## Core Philosophy of the ExCom PMO
+## Core Philosophy of the ExCom v2.0 PMO
 
-1. **Zero Re-Litigation**: The strategic debate is over. The PMO executes the User's chosen ruling—neither second-guessing it nor planning rejected options.
-2. **Guardrail Integration**: Every retained `Non-Negotiable Condition` from the C-Suite and Wildcards in Stage 1 becomes a concrete **gate, checklist item, or kill criterion** in the PMO plan.
-3. **Right-Sized Rigor**: Match complexity to stakes. A weekend personal negotiation gets a crisp 1-page battle card; a 12-month company launch or international relocation gets a phased critical-path blueprint.
+1. **Zero Re-Litigation**: Execute only the User's locked-in decision.
+2. **Executable Control Tower (Never Static Prose Alone)**: Always initialize and maintain a live Digital Twin using [scripts/excom_engine.py](../scripts/excom_engine.py) (`project-state.json`, `events-bus.jsonl`, `dashboard.html`, and CSV exports in `exports/`).
+3. **Upstream Contagion Enforcement**: Wire `depends_on` and `coupled_seats` on every milestone so a slip, cost overrun, or supplier/tech change in one perimeter wakes affected Directors *before* their workstream starts.
 
 ---
 
-## Mandatory 5-Block PMO Deliverable
+## Step 1 — Initialize the Control Tower (`excom_engine.py init`)
 
-Deliver the blueprint in the **exact language used by the user**, structured into these 5 crisp sections:
+Choose a clean project directory (e.g., `<workspace>/excom-projects/<project-slug>/`), write an initial `spec.json` with:
+- `project_name`, `locked_decision`, `start_date`, `as_of_date`, `contingency_pct` (`10–20`),
+- `tasks`: list of milestones/workstreams with `id`, `phase`, `name`, `owner_seat`, `depends_on`, `optimistic_days`, `likely_days`, `pessimistic_days`, `planned_budget`, `committed_cost`, `actual_cost`, `progress_pct`, `status`, `hard_gate`, and `coupled_seats` (`{"CFO": "...", "CLO": "..."}`),
+- `recurring_opex`: annual recurring cost items (`name`, `seat`, `annual_eur`),
+- `guardrails`: every Stage-1 `Non-Negotiable Condition` (`seat`, `rule`, `status`),
+- `kill_criteria`: pre-committed objective abort/pivot triggers (`phase`, `owner_seat`, `trigger`, `action`, `status`).
 
-### 1. Project Charter & Scope Boundary
-- **Objective & Definition of Done (DoD)**: Measurable end-state that defines unequivocal completion.
-- **In-Scope vs Out-of-Scope**: Explicit list of 2–4 temptations/distractions deliberately excluded from V1 to protect velocity.
+Run:
+```bash
+python <skill-root>/scripts/excom_engine.py init --project-dir <project-dir> --spec <spec.json>
+```
 
-### 2. Phased Workstreams & Critical Path
-Organize execution into **3 to 4 sequential or parallel phases** (e.g., *Phase 1: De-Risk & Lock Prerequisites → Phase 2: Build / Negotiate Core → Phase 3: Launch / Transition & Stabilize*).
+ *(On Antigravity, if the user wants recurring automated monitoring, offer to schedule a weekly `excom_engine.py audit` via `/schedule` or the `schedule` tool.)*
 
-| Phase / Milestone | Concrete Deliverable | Owner / Role | Target Horizon | Hard Dependency / Gate |
-| :--- | :--- | :--- | :--- | :--- |
-| **M1 — ...** | ... | ... | ... | ... |
+---
 
-Highlight the **Critical Path** (the single chain of tasks where a 1-day slip delays the entire outcome).
+## Step 2 — Deliver the 5-Block Executive Charter + Live Links
 
-### 3. Resource, Budget & Bandwidth Envelope
-- **Financial Envelope**: Direct cost + recommended contingency buffer (`10–20%`).
-- **Time / Bandwidth Cap**: Weekly hours or team allocation required so operational reality matches `COO` / `CHRO` limits.
-- **External Dependencies**: Advisors, counterparties, tools, or approvals required (notary, lawyer, vendor, co-founder, spouse).
+Present the concise executive summary in the user's language alongside clickable links to `dashboard.html` and the `exports/*.csv` files:
 
-### 4. Risk Register, Guardrails & Pre-Committed Kill Criteria
-Translate Stage-1 ExCom conditions into active governance:
-- **Top 3 Operational Risks & Mitigations** (`If X happens → immediately execute Y`).
-- **Hard Kill / Pivot Criteria**: Objective, pre-agreed thresholds (*date, metric, or cost ceiling*) where you pause or abort automatically—preventing sunk-cost drift.
-
-### 5. Immediate Day-1 Action Checklist (Next 24–48 Hours)
-Close with **exact, concrete next 3 actions** small enough to start immediately without friction (who to message, what document/number to pull, what meeting/test to book).
+1. **Project Charter & Scope Boundary** (*Definition of Done*, *In-Scope* vs *Out-of-Scope*).
+2. **CPM Critical-Path Schedule & PERT Horizon** (`Baseline` vs `P85` buffered duration, highlighting zero-float Critical Path tasks).
+3. **EVM Budget, OPEX & Bandwidth Envelope** (`BAC` + contingency, annual `OPEX`, weekly founder/team hour cap).
+4. **360° Guardrails, Cross-Perimeter Couplings & Hard Kill Criteria**.
+5. **Immediate Next 3 Actions (24–48h) + Ready Stage-3 Director Workstreams** (offering to dispatch `CLO`, `CFO`, `CPO`/`COO`, `CTO`, etc. immediately to generate the first concrete deliverables).

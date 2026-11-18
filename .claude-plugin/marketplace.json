@@ -7,8 +7,8 @@
     {
       "name": "excom",
       "source": "./",
-      "description": "Multi-agent Executive Committee (CEO + 3 Wildcards + 20 C-Suite Directors + PMO) for corporate and life decisions.",
-      "version": "1.0.0"
+      "description": "25-role Multi-Agent Executive Committee & 360° Project Operating System (Board Deliberation + CPM/EVM Control Tower + Cross-Communicating Director Toolkits).",
+      "version": "2.0.0"
     }
   ]
 }
