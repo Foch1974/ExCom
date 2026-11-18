@@ -20,8 +20,11 @@ Asking a single AI prompt *"What should I do?"* produces polite, hedged averages
 **ExCom** models how elite executive committees actually operate:
 
 1. **You are the Chair of the Board** (final decision-maker).
-2. **The CEO** is your single interlocutor: frames the decision, selects a **surgical quorum of 2–4 C-Suite Directors** from a 20-seat bench (never summoning irrelevant seats), pairs them with **3 Permanent Lateral-Thinking Wildcards**, and runs **blind parallel deliberation** so advisors cannot anchor on each other.
-3. **Gate 1 (Arbitration Stop)**: The CEO exposes the real fault lines, recommends a clear ruling with non-negotiable guardrails, and **hands the gavel back to you**.
+2. **The CEO** is your single interlocutor: frames the decision and mobilizes a **Dual-Circle ExCom in parallel** (typically **6 to 12 isolated agents** on structural decisions):
+   - **Circle 1 — Domain Drivers**: Every relevant C-Suite leader needed to build, ship, sell, or run the move (`CPO`, `CTO`, `CAIO`, `CMO`, `CRO-Revenue`, etc.).
+   - **Circle 2 — Mandatory 360° Risk Shield**: Systematic audit across **Financial (`CFO`)**, **Legal/Regulatory (`CLO` / `CCO-Compliance`)**, **Operational (`COO`)**, **Human Bandwidth (`CHRO`)**, and **Systemic/Cyber (`CRO-Risk` / `CISO`)** risks. *(Anti-bloat rule: any risk seat that finds zero material issue returns a 1-line `CLEAR` sign-off instead of inventing filler—giving you **100% risk coverage with 0% noise**.)*
+   - **Circle 3 — 3 Permanent Lateral-Thinking Wildcards** (`Devil's Advocate`, `The Outsider`, `The Optimist`).
+3. **Gate 1 (Arbitration Stop)**: The CEO exposes the real fault lines, shows the 360° audit radar, recommends a clear ruling with non-negotiable guardrails, and **hands the gavel back to you**.
 4. **Gate 2 (Optional PMO Structuring)**: Only *after* you rule and opt in, the **Project Management Officer (PMO)** turns your locked-in decision into a concrete critical-path blueprint—zero wasted planning on rejected options.
 
 ---
@@ -30,18 +33,18 @@ Asking a single AI prompt *"What should I do?"* produces polite, hedged averages
 
 ```mermaid
 flowchart TD
-    U["User (Chair / Final Decision-Maker)"] --> CEO["CEO — Framing & Surgical Quorum"]
-    CEO --> W["3 Permanent Wildcards (Parallel Isolation)"]
-    CEO --> C["2–4 Selected C-Suite Directors (from 20-Seat Bench)"]
+    U["User (Chair / Final Decision-Maker)"] --> CEO["CEO — Framing & Dual-Circle Quorum"]
+    CEO --> C1["Circle 1: Domain Drivers (Value, Tech, Product, Market)"]
+    CEO --> C2["Circle 2: 360° Risk Shield (CFO, CLO, COO, CHRO, CISO/CRO)"]
+    CEO --> C3["Circle 3: 3 Wildcards (Devil's Advocate, Outsider, Optimist)"]
 
-    subgraph Blind_Round_1 ["Round 1: Blind Parallel Deliberation"]
-        W --- D1["Devil's Advocate (Pre-Mortem)"]
-        W --- D2["The Outsider (First-Principles)"]
-        W --- D3["The Optimist (10x Leverage)"]
-        C --- CS["Relevant C-Suite Seats Only (MECE)"]
+    subgraph Blind_Round_1 ["Round 1: Blind Parallel Execution (Isolated Subagents)"]
+        C1 --- DD["Full Memo (<=150w)"]
+        C2 --- RS["Full Memo if Flag/Risk | 1-Line CLEAR if Green"]
+        C3 --- WC["Pre-Mortem · First-Principles · 10x Leverage"]
     end
 
-    D1 & D2 & D3 & CS --> ARB["CEO Synthesis, Fault Lines & Recommended Ruling"]
+    DD & RS & WC --> ARB["CEO Synthesis: 360° Radar, Fault Lines & Recommended Ruling"]
     ARB --> GATE1{"Gate 1: User Ruling"}
     GATE1 -- "Challenge / Iterate" --> CEO
     GATE1 -- "Decision Locked (No PMO needed)" --> DONE["Done"]
@@ -60,7 +63,7 @@ flowchart TD
 | **`OUTSIDER`** | The Outsider | *First-Principles*: strips away industry/social dogma and proposes non-obvious "third doors." |
 | **`OPTIMIST`** | The Optimist | *Asymmetric Upside*: hunts for 10x leverage, compounding flywheels, and constraint-flipping moves. |
 
-### Tier 2 — The 20 Actionable C-Suite Directors (2–4 Summoned per Session)
+### Tier 2 — The 20 Actionable C-Suite Directors (Dual-Circle Quorum: Domain Drivers + 360° Risk Shield)
 Every seat carries a **dual Corporate ↔ Personal Life lens** (so a `CFO` evaluates burn/IRR on a SaaS launch, and net-worth/liquidity/tax TCO on a personal home purchase—without awkward corporate jargon):
 
 | Cluster | Seat ID | Title | Corporate Scope ↔ Personal / Life Scope |

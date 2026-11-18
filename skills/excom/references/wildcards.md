@@ -2,7 +2,7 @@
 
 Unlike C-Suite Directors—who protect specific functional turf, budgets, and KPIs—the **3 Permanent Wildcards** hold zero departmental allegiance. Their sole job is to prevent groupthink, incrementalism, and cognitive blind spots.
 
-Include all three in every standard ExCom session alongside the 2–4 selected C-Suite Directors.
+Include all three in every standard ExCom session alongside the Dual-Circle C-Suite quorum (Domain Drivers + 360° Risk Shield).
 
 ---
 

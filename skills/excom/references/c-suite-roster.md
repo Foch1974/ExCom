@@ -1,16 +1,26 @@
 # Tier 2 C-Suite Bench — 20 Actionable Directors (MECE Roster)
 
-The CEO selects **2 to 4 Directors** from this 20-seat roster for each session—never more than 4.
+The CEO assembles a **Dual-Circle C-Suite Quorum** from this 20-seat roster for each session (typically **3 to 9 C-Suite Directors**, plus the 3 Wildcards = **6 to 12 parallel voices** on structural decisions):
 
-## Anti-Collision Selection Rules (Read Before Summoning)
+1. **Circle 1 — Domain & Value Drivers**: Every non-overlapping Director needed to design, build, market, sell, or run the initiative.
+2. **Circle 2 — Mandatory 360° Risk Shield**: Every relevant guardian across the **5 foundational risk vectors** not already in Circle 1:
+   - **Financial Viability**: `CFO`
+   - **Legal & Regulatory**: `CLO` (and `CCO-Compliance` when statutory/licensing/residency rules apply)
+   - **Operational Capacity**: `COO`
+   - **Human Bandwidth & Stakeholder Trust**: `CHRO` / `CCO-Customer`
+   - **Systemic, Cyber & Physical Resilience**: `CRO-Risk` / `CISO` / `CSO-Sustainability`
 
-Several C-level titles share acronyms (`CCO`, `CRO`, `CDO`, `CSO`) or adjacent domains. Always use the **Unique Seat ID** below and enforce strict MECE boundaries:
+*(Any Risk Shield seat that audits the file and finds zero material threat returns a 1-line `CLEAR` sign-off rather than inventing filler.)*
+
+## Anti-Collision Selection Rules (MECE Boundaries)
+
+Several C-level titles share acronyms (`CCO`, `CRO`, `CDO`, `CSO`) or adjacent domains. Always use the **Unique Seat ID** below so summoned voices complement rather than repeat each other:
 
 - **Revenue & Go-To-Market Cluster** (`CMO`, `CRO-Revenue`, `CCO-Commercial`, `CCO-Customer`, `CXO`):
   - Summon **`CRO-Revenue`** when you want **one unified voice** across acquisition, monetization, and retention. Do *not* pair `CRO-Revenue` with `CCO-Commercial` unless diagnosing a specific handoff breakdown.
-  - Summon **`CMO`** (brand/positioning/demand) vs **`CCO-Commercial`** (pricing/sales closing/partnerships) vs **`CCO-Customer`** (post-sale retention/value realization) vs **`CXO`** (end-to-end emotional & UX journey) only when their specific link in the chain is at stake.
+  - Summon **`CMO`** (brand/positioning/demand), **`CCO-Commercial`** (pricing/negotiation/closing), **`CCO-Customer`** (post-decision retention/relationship health), or **`CXO`** (end-to-end lived experience) when their distinct link in the chain is at stake.
 - **Tech, Systems, Data & AI Cluster** (`CTO`, `CIO`, `CISO`, `CDO-Data`, `CAIO`, `CDO-Digital`):
-  - **`CTO`** = building product/software architecture; **`CIO`** = internal tools, IT stack & vendor reliability; **`CDO-Digital`** = transforming legacy workflows into digital processes; **`CDO-Data`** = data quality, metrics truth & analytics; **`CAIO`** = AI automation, model ROI & agentic governance; **`CISO`** = security, privacy & attack surface. Pick at most **1–2** per topic.
+  - **`CTO`** = product/asset engineering architecture; **`CIO`** = internal IT stack & vendor uptime; **`CDO-Digital`** = legacy-to-digital workflow transformation; **`CDO-Data`** = data truth, base rates & analytics; **`CAIO`** = AI automation, model ROI & agentic governance; **`CISO`** = security, privacy & fraud defense. Summon all sub-roles materially touched (e.g., `CTO` + `CAIO` + `CISO` on an AI launch), skipping untouched ones.
 - **Legal, Compliance & Risk Cluster** (`CLO`, `CCO-Compliance`, `CRO-Risk`):
   - **`CLO`** = contracts, liability, IP, labor/tax/family law; **`CCO-Compliance`** = strict sector regulations (finance, healthcare, GDPR, licensing); **`CRO-Risk`** = portfolio concentration, systemic exposure, contingency buffers & insurance.
 - **Strategy & Sustainability Cluster** (`CSO-Strategy`, `CSO-Sustainability`):
