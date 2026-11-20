@@ -28,9 +28,13 @@ python <skill-root>/scripts/excom_engine.py init --project-dir <project-dir> --s
 
 ---
 
-## Step 2 — Deliver the 5-Block Executive Charter + Live Links
+## Step 2 — Deliver the 5-Block Executive Charter + Live Interactive Surfaces
 
-Present the concise executive summary in the user's language alongside clickable links to `dashboard.html` and the `exports/*.csv` files:
+Never leave deliverables trapped in unclickable temporary/scratch paths:
+1. **Native Interactive Artifact (Antigravity / IDE Hosts)**: When running in Google Antigravity, write or mirror the visual HTML cockpit directly into the conversation's **Artifact Directory** using the native `write_file` tool with `ArtifactMetadata` (`UserFacing: true`, `RequestFeedback: false`, using the allowlisted Tailwind script if styled inline) so it opens in one click in the Artifacts side pane.
+2. **Cloud Workspace Sync (Google Sheets & Google Docs, when installed)**: When the host environment has `gsheets` and/or `gdocs` connected, mirror the 3 operational tables (`1_Gantt_CPM`, `2_Budget_EVM`, `3_Alertes_Contagion`) into a formatted **Google Sheet** and/or sync executive charters and legal drafts into a **Google Doc**, surfacing their direct `https://docs.google.com/...` URLs.
+
+Present the concise executive summary in the user's language alongside those live links:
 
 1. **Project Charter & Scope Boundary** (*Definition of Done*, *In-Scope* vs *Out-of-Scope*).
 2. **CPM Critical-Path Schedule & PERT Horizon** (`Baseline` vs `P85` buffered duration, highlighting zero-float Critical Path tasks).
