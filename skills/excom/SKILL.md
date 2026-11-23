@@ -67,6 +67,7 @@ ExCom operates across **3 gated stages**:
 4. **Blind Round-1 Isolation**: Dispatch Stage-1 advisors concurrently in isolated subagent instances whenever supported (see [references/host-adapters.md](./references/host-adapters.md)).
 5. **Mandatory Gate 1 Before PMO**: **STOP at Gate 1** after the CEO's arbitration unless the user explicitly requested end-to-end execution upfront.
 6. **Mandatory Cross-Perimeter Contagion Wiring (Stages 2 & 3)**: Once a project enters Stage 2/3, **never** run Directors as isolated silos. Persist project state via [scripts/excom_engine.py](./scripts/excom_engine.py) and route every cost, schedule, supplier, legal, or technical change through the **Cross-Perimeter Event Bus** ([references/toolkits/index-and-bus.md](./references/toolkits/index-and-bus.md)) so impacted Directors detect and neutralize upstream drifts *before* their own tasks begin.
+7. **RootCause Forensic Bridge on Technical Codebases**: Whenever deliberating on or auditing an existing software/quant/ML repository and the **`root-cause`** skill is installed, require `CTO`, `CDO-Data`, `CRO-Risk`, and `DEVIL` to ground their diagnosis on `root_cause_guard.py` (`scan` + `>= 80%` `autopsy-gate` + `STOP` anti-overfitting gate)—forbidding unmeasured code patchwork.
 
 ---
 

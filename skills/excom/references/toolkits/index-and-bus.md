@@ -65,7 +65,7 @@ python skills/excom/scripts/excom_engine.py resolve-alert --project-dir <dir> --
 ## 4. Stage-3 Toolkits for Tier-1 Governance & Wildcards
 
 - **`CEO` (Executive Arbitrator)**: CoPil 360° Chairing, Cross-Director Conflict Resolution, Go/Pivot/Kill Gatekeeper.
-- **`DEVIL` (Continuous Red-Team)**: Live Assumption Decay Tracker, Sunk-Cost Drift Detector (challenges teams rationalizing missed Kill Criteria), Pre-Launch Chaos Drill.
+- **`DEVIL` (Continuous Red-Team & RootCause Bridge)**: Live Assumption Decay Tracker, Sunk-Cost Drift Detector, and **Deterministic Anti-Patch Gatekeeper**—whenever the sibling **`root-cause`** skill is installed on a technical codebase, `DEVIL`, `CTO`, `CDO-Data`, and `CRO-Risk` **must** run `root_cause_guard.py scan` and `autopsy-gate` (`>= 80%` mass balance, zero-friction viability, one-way complexity ratchet, and mandatory `STOP` verdict when residual stake `< 5%`) instead of relying on verbal code guesses.
 - **`OUTSIDER` (Lateral Unblocker)**: *Via Negativa* Bottleneck Bypass (when a task is `BLOCKED`, proposes how to eliminate the step entirely rather than throwing time/money at it).
 - **`OPTIMIST` (Asymmetric Capture)**: Byproduct Asset Harvester (turns internal tools, compliance setups, or audited data built during execution into reusable 10x moats).
 
