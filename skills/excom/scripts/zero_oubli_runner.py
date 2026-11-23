@@ -1,23 +1,19 @@
 #!/usr/bin/env python3
-"""ExCom v3.0 — Aeronautical « Zéro-Oubli » Lot & SHA-256 Gate Runner.
+"""ExCom v3.1 — Aeronautical « Zero-Amnesia » Lot, SHA-256 Gate, Hook & Anchor Runner (en-US).
 
-Enforces 100% factual, zero-amnesia execution across sequential Lots (Lot 0 .. Lot K)
-and blocking Gates (P0 .. PK) for BOTH `CODE` and `METIER` projects:
-
-  1. `init-lot0`   : Locks approved items (`FIX_01..FIX_N`), project invariants, sacred file
-                     SHA-256 hashes, and sequential gates (`P1..PK`) into `zero_oubli_ledger.json`.
-  2. `verify-gate` : Physically blocks Gate `Pk` unless:
-                     - Gate `P_{k-1}` holds a valid, unbroken SHA-256 certificate;
-                     - Every item in `Pk` AND every cumulative prior item in `P1..P_{k-1}` passes:
-                       * `CODE` item: test function physically exists in AST, contains real `assert`s,
-                         calls/references the real production symbol (`Zéro Faux Jumeau`), zero prior
-                         verified test was deleted (`Indelible Cumulative Suite`), and test runner exits 0;
-                       * `METIER` item: deliverable file physically exists on disk, meets min byte size,
-                         and contains 100% of mandatory clauses/sections (`required_markers`);
-                     - Sacred files keep their exact SHA-256.
-                     Issues cryptographic certificate `gate_<Pk>_certified.json` bound to `tree_sha256`.
-  3. `status`      : Audits live workspace `tree_sha256` against certificates (auto-detects stale
-                     gates if any tracked file was edited after certification) and prints progress.
+Deterministic execution spine across sequential Lots (Lot 0 .. Lot K) and blocking Gates (P0 .. PK):
+  1. `init-lot0`     : Locks approved items, invariants, and sacred file SHA-256 hashes; certifies P0.
+  2. `verify-gate`   : Enforces sequential gate order, sacred file integrity, AST Zero-Fake-Twin check,
+                       Indelible Cumulative Test Suite, mandatory METIER clauses, and real test pass;
+                       issues cryptographic `gate_<Pk>_certified.json` bound to `tree_sha256`.
+  3. `status`        : Verifies live `tree_sha256` against certificates (catches unauthorized edits).
+  4. `install-hooks` : [ADD_01] Installs a physical `PreToolUse` firewall (`.agents/hooks.json`) on new
+                       projects (never overwrites existing hooks without `--force`) so the LLM cannot
+                       bypass Gate P0, alter sacred files, or delete certified `test_*` functions.
+  5. `render-anchor` : [ADD_04] Compiles `CONTEXT_ANCHOR.md` 100% deterministically from raw primary
+                       JSON ledgers (`zero_oubli_ledger.json`, `dead_ends_registry.json`, `custom_profile.json`,
+                       `project-state.json`) — ZERO recursive LLM summarization = ZERO granularity loss
+                       even after 50+ iterations.
 """
 
 from __future__ import annotations
@@ -36,8 +32,112 @@ from typing import Any, Dict, List, Optional, Set
 
 SKIP_DIRS: Set[str] = {
     ".git", "node_modules", "__pycache__", ".pytest_cache", ".venv", "venv",
-    "dist", "build", "bin", "obj",
+    "dist", "build", "bin", "obj", ".agents",
 }
+
+PRETOOL_GUARD_TEMPLATE = '''#!/usr/bin/env python3
+"""ExCom Physical PreToolUse Firewall (Auto-Generated for Project Protection).
+
+Blocks mutating file calls (`write_file`, `edit_file`, `Write`, `Edit`, `MultiEdit`) inside
+the project root whenever:
+  1. Gate P0 (`gate_P0_certified.json`) has not been initialized yet;
+  2. Target path is a locked `sacred_file`;
+  3. An edit removes any previously certified `test_*` function from the Indelible Test Suite.
+"""
+import ast
+import json
+from pathlib import Path
+import sys
+
+LEDGER_DIR = Path(r"__LEDGER_DIR__")
+PROJECT_DIR = Path(r"__PROJECT_DIR__").resolve()
+MUTATING_TOOLS = {"write_file", "edit_file", "Write", "Edit", "MultiEdit"}
+
+
+def extract_tool_and_args(payload: dict) -> tuple[str, dict]:
+    tool = str(payload.get("tool_name") or payload.get("toolName") or payload.get("tool") or "")
+    args = payload.get("tool_input") or payload.get("toolInput") or payload.get("arguments") or payload.get("args") or {}
+    if isinstance(args, str):
+        try:
+            args = json.loads(args)
+        except Exception:
+            args = {}
+    return tool, (args if isinstance(args, dict) else {})
+
+
+def deny(reason: str) -> int:
+    sys.stderr.write(f"[EXCOM PRETOOL FIREWALL BLOCKED] {reason}\\n")
+    print(json.dumps({"decision": "block", "reason": reason}))
+    return 2
+
+
+def main() -> int:
+    raw = sys.stdin.read().strip()
+    if not raw:
+        return 0
+    try:
+        payload = json.loads(raw)
+    except Exception:
+        return 0
+
+    tool, args = extract_tool_and_args(payload)
+    if tool not in MUTATING_TOOLS:
+        return 0
+
+    target_str = str(args.get("Path") or args.get("file_path") or args.get("path") or "").strip()
+    if not target_str:
+        return 0
+    target = Path(target_str).resolve()
+
+    # Only guard files inside PROJECT_DIR (ignore scratch/, artifacts/, external dirs)
+    try:
+        rel = str(target.relative_to(PROJECT_DIR)).replace("\\\\", "/")
+    except ValueError:
+        return 0
+
+    if rel.startswith((".agents/", "scratch/", "excom-projects/")):
+        return 0
+
+    p0_cert = LEDGER_DIR / "gate_P0_certified.json"
+    ledger_file = LEDGER_DIR / "zero_oubli_ledger.json"
+    if not p0_cert.is_file() or not ledger_file.is_file():
+        return deny(f"Cannot modify '{rel}' before Gate 0 & Lot 0 registration (`zero_oubli_runner.py init-lot0`).")
+
+    ledger = json.loads(ledger_file.read_text(encoding="utf-8"))
+
+    # 1. Sacred file lock
+    sacred = {k.replace("\\\\", "/") for k in ledger.get("sacred_files_sha256", {}).keys()}
+    if rel in sacred:
+        return deny(f"File '{rel}' is a locked SACRED FILE (immutable SHA-256).")
+
+    # 2. Indelible test suite protection against test_* deletion
+    indelible = set(ledger.get("indelible_verified_tests", []))
+    if indelible and target.suffix.lower() == ".py" and target.is_file():
+        old_src = target.read_text(encoding="utf-8", errors="replace")
+        new_content = args.get("Content") or args.get("content")
+        if new_content is None and ("Target" in args or "old_string" in args):
+            tgt_s = str(args.get("Target") or args.get("old_string") or "")
+            rep_s = str(args.get("Replacement") or args.get("new_string") or "")
+            if tgt_s and tgt_s in old_src:
+                new_content = old_src.replace(tgt_s, rep_s)
+        if isinstance(new_content, str):
+            try:
+                old_tree = ast.parse(old_src)
+                new_tree = ast.parse(new_content)
+                old_fns = {n.name for n in ast.walk(old_tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+                new_fns = {n.name for n in ast.walk(new_tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+                removed_indelible = sorted((old_fns & indelible) - new_fns)
+                if removed_indelible:
+                    return deny(f"Indelible Test Suite violation: attempt to delete certified test(s) {removed_indelible} in '{rel}'.")
+            except SyntaxError:
+                pass
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+'''
 
 
 def now_iso() -> str:
@@ -51,8 +151,7 @@ def file_sha256(path: Path) -> str:
 def compute_workspace_tree_sha256(project_dir: Path, tracked_rel_paths: Optional[List[str]] = None) -> str:
     h = hashlib.sha256()
     if tracked_rel_paths:
-        rels = sorted(set(tracked_rel_paths))
-        for rel in rels:
+        for rel in sorted(set(tracked_rel_paths)):
             fp = project_dir / rel
             if fp.is_file():
                 h.update(rel.replace("\\", "/").encode("utf-8"))
@@ -78,12 +177,12 @@ def compute_workspace_tree_sha256(project_dir: Path, tracked_rel_paths: Optional
 
 def inspect_python_test_ast(test_file: Path, test_fn_name: str, required_prod_symbol: str) -> Dict[str, Any]:
     if not test_file.is_file():
-        return {"ok": False, "reason": f"Fichier de test introuvable : {test_file}"}
+        return {"ok": False, "reason": f"Test file not found: {test_file}"}
     source = test_file.read_text(encoding="utf-8", errors="replace")
     try:
         tree = ast.parse(source, filename=str(test_file))
     except SyntaxError as exc:
-        return {"ok": False, "reason": f"SyntaxError dans {test_file.name}: {exc}"}
+        return {"ok": False, "reason": f"SyntaxError in {test_file.name}: {exc}"}
 
     all_test_fns: Set[str] = set()
     target_node: Optional[ast.AST] = None
@@ -103,7 +202,7 @@ def inspect_python_test_ast(test_file: Path, test_fn_name: str, required_prod_sy
                 imported_or_used_names.add(alias.name.split(".")[0])
 
     if target_node is None:
-        return {"ok": False, "reason": f"Fonction `{test_fn_name}` absente de {test_file.name}", "all_tests": all_test_fns}
+        return {"ok": False, "reason": f"Test function `{test_fn_name}` missing in {test_file.name}", "all_tests": all_test_fns}
 
     has_assert = False
     fn_used_names: Set[str] = set()
@@ -121,14 +220,14 @@ def inspect_python_test_ast(test_file: Path, test_fn_name: str, required_prod_sy
             fn_used_names.add(sub.attr)
 
     if not has_assert:
-        return {"ok": False, "reason": f"Test complaisant détecté : `{test_fn_name}` ne contient aucune assertion (`assert`).", "all_tests": all_test_fns}
+        return {"ok": False, "reason": f"Tautological test blocked: `{test_fn_name}` contains zero `assert` statements.", "all_tests": all_test_fns}
 
     if required_prod_symbol:
         all_refs = imported_or_used_names | fn_used_names
         if required_prod_symbol not in all_refs:
             return {
                 "ok": False,
-                "reason": f"Violation Zéro-Faux-Jumeau : `{test_fn_name}` n'appelle pas le symbole réel `{required_prod_symbol}`.",
+                "reason": f"Zero-Fake-Twin violation: `{test_fn_name}` does not invoke real production symbol `{required_prod_symbol}`.",
                 "all_tests": all_test_fns,
             }
 
@@ -138,19 +237,93 @@ def inspect_python_test_ast(test_file: Path, test_fn_name: str, required_prod_sy
 def verify_metier_deliverable(project_dir: Path, item: Dict[str, Any]) -> Dict[str, Any]:
     rel = str(item.get("deliverable_path", "")).strip()
     if not rel:
-        return {"ok": False, "reason": "Aucun `deliverable_path` spécifié pour cet item METIER."}
+        return {"ok": False, "reason": "Missing `deliverable_path` for METIER item."}
     fp = (project_dir / rel) if not Path(rel).is_absolute() else Path(rel)
     if not fp.is_file():
-        return {"ok": False, "reason": f"Livrable introuvable sur disque : {fp}"}
+        return {"ok": False, "reason": f"Deliverable file missing on disk: {fp}"}
     min_bytes = int(item.get("min_bytes", 120))
     size = fp.stat().st_size
     if size < min_bytes:
-        return {"ok": False, "reason": f"Livrable trop court ({size} octets < {min_bytes} requis) : {fp.name}"}
+        return {"ok": False, "reason": f"Deliverable below minimum byte threshold ({size} B < {min_bytes} B): {fp.name}"}
     text = fp.read_text(encoding="utf-8", errors="replace").lower()
     missing = [m for m in item.get("required_markers", []) if str(m).lower() not in text]
     if missing:
-        return {"ok": False, "reason": f"Clauses/sections obligatoires absentes de {fp.name} : {missing}"}
-    return {"ok": True, "reason": f"Livrable vérifié ({size} octets, 100% des marqueurs présents)"}
+        return {"ok": False, "reason": f"Mandatory clauses/sections missing in {fp.name}: {missing}"}
+    return {"ok": True, "reason": f"Verified ({size} bytes, 100% mandatory markers present)"}
+
+
+def compile_lossless_anchor(ledger_dir: Path, pmo_dir: Optional[Path] = None) -> Path:
+    """ADD_04: Compiles CONTEXT_ANCHOR.md strictly from raw primary JSON databases (0% LLM re-summarization)."""
+    ledger_path = ledger_dir / "zero_oubli_ledger.json"
+    de_path = ledger_dir / "dead_ends_registry.json"
+    prof_path = ledger_dir / "custom_profile.json"
+
+    ledger = json.loads(ledger_path.read_text(encoding="utf-8")) if ledger_path.is_file() else {}
+    de_store = json.loads(de_path.read_text(encoding="utf-8")) if de_path.is_file() else {"total_trials_count": 0, "dead_ends": []}
+    prof = json.loads(prof_path.read_text(encoding="utf-8")) if prof_path.is_file() else {}
+    pmo_state: Dict[str, Any] = {}
+    if pmo_dir and (pmo_dir / "project-state.json").is_file():
+        pmo_state = json.loads((pmo_dir / "project-state.json").read_text(encoding="utf-8"))
+
+    project_dir = Path(ledger["project_dir"]) if ledger.get("project_dir") else None
+    live_sha = (
+        compute_workspace_tree_sha256(project_dir, ledger.get("tracked_files") or None)
+        if (project_dir and project_dir.is_dir())
+        else "N/A"
+    )
+
+    lines: List[str] = [
+        f"# CONTEXT ANCHOR (Deterministic Primary-Source Snapshot — Zero Lossy Summarization)",
+        f"- **Compiled At** : `{now_iso()}`",
+        f"- **Project** : `{ledger.get('project_name', pmo_state.get('project_name', 'N/A'))}` (`{ledger.get('mode', 'N/A')}` · `{ledger.get('domain', prof.get('domain', 'N/A'))}`)",
+        f"- **Live Workspace `tree_sha256`** : `{live_sha}`",
+        f"- **Cumulative Trials (`N_trials`)** : `{de_store.get('total_trials_count', 0)}` · **Indelible Tests Locked** : `{len(ledger.get('indelible_verified_tests', []))}`",
+        "",
+        "## 1. Immutable Project Invariants & Sacred Files",
+    ]
+    if prof.get("mass_balance_equation"):
+        lines.append(f"- **Conservation Equation** : `{prof['mass_balance_equation']}`")
+    for inv in ledger.get("project_invariants", []) or prof.get("mandatory_brakes_checklist", []):
+        lines.append(f"- **Invariant** : {inv}")
+    for sf, sha in ledger.get("sacred_files_sha256", {}).items():
+        lines.append(f"- **Sacred File Locked** : `{sf}` (`sha256:{sha[:16]}...`)")
+
+    lines.extend(["", "## 2. Aeronautical Lots & SHA-256 Gates Status (Exact Item Granularity)"])
+    g_certs = ledger.get("gate_certificates", {})
+    for g in ledger.get("gates_order", []):
+        c = g_certs.get(g)
+        st = "LOCKED_PENDING" if not c else ("CERTIFIED_VALID" if c.get("tree_sha256") == live_sha else "STALE_SHA256")
+        lines.append(f"- **Gate `{g}`** : `{st}`")
+    for it in ledger.get("items", []):
+        target_ref = it.get("test_id") or it.get("deliverable_path") or ",".join(it.get("target_files", []))
+        lines.append(f"  - `[{it['status']}]` **`{it['id']}`** (`{it['lot']}` / `{it['gate']}` · `{it['owner_seat']}`) : {it['title']} — ref: `{target_ref}`")
+
+    lines.extend(["", "## 3. Buried Dead-Ends Registry (Forbidden Repeat Loops)"])
+    dead_ends = de_store.get("dead_ends", [])
+    if not dead_ends:
+        lines.append("- None recorded.")
+    else:
+        for de in dead_ends:
+            em = de.get("evidence_metric")
+            metric_tag = f" [{em}]" if em else ""
+            lines.append(f"- **`{de.get('id')}`** (`{de.get('rejected_on')}`) — *{de.get('title')}* : {de.get('failure_reason')}{metric_tag}")
+
+    if pmo_state:
+        evm = pmo_state.get("metrics", {}).get("evm", {})
+        open_alerts = [a for a in pmo_state.get("alerts", []) if a.get("status") == "OPEN"]
+        lines.extend([
+            "",
+            "## 4. Live PMO Control Tower Telemetry",
+            f"- **RAG** : `{pmo_state.get('overall_rag')}` · **Critical Path** : `{' -> '.join(pmo_state.get('metrics', {}).get('critical_path', []))}`",
+            f"- **EVM** : `BAC = {evm.get('bac_eur', 0)} EUR` · `Committed = {evm.get('committed_eur', 0)} EUR` · `AC = {evm.get('ac_eur', 0)} EUR` · `CPI = {evm.get('cpi', 1.0)}` · `SPI = {evm.get('spi', 1.0)}`",
+            f"- **Open Cross-Perimeter Alerts (`{len(open_alerts)}`)** :",
+        ])
+        for al in open_alerts:
+            lines.append(f"  - `[{al.get('severity')}]` `{al.get('source_seat')} -> {','.join(al.get('target_seats', []))}` : {al.get('title')}")
+
+    out_path = ledger_dir / "CONTEXT_ANCHOR.md"
+    out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return out_path
 
 
 def cmd_init_lot0(args: argparse.Namespace) -> int:
@@ -191,7 +364,7 @@ def cmd_init_lot0(args: argparse.Namespace) -> int:
         })
 
     ledger = {
-        "schema_version": "3.0.0",
+        "schema_version": "3.1.0",
         "initialized_at": now_iso(),
         "project_name": spec.get("project_name", project_dir.name),
         "project_dir": str(project_dir),
@@ -209,7 +382,6 @@ def cmd_init_lot0(args: argparse.Namespace) -> int:
     ledger_path = ledger_dir / "zero_oubli_ledger.json"
     ledger_path.write_text(json.dumps(ledger, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    # Certify P0 (Lot 0 Registration Complete)
     cert_p0 = {
         "gate": "P0",
         "certified_at": now_iso(),
@@ -218,9 +390,12 @@ def cmd_init_lot0(args: argparse.Namespace) -> int:
         "tree_sha256": compute_workspace_tree_sha256(project_dir, ledger["tracked_files"]),
     }
     (ledger_dir / "gate_P0_certified.json").write_text(json.dumps(cert_p0, ensure_ascii=False, indent=2), encoding="utf-8")
+    anchor = compile_lossless_anchor(ledger_dir)
+
     print(json.dumps({
-        "status": "PORTE_P0_CERTIFIED",
+        "status": "GATE_P0_CERTIFIED",
         "ledger_path": str(ledger_path),
+        "context_anchor_path": str(anchor),
         "items_registered": len(items),
         "gates_order": gates_order,
     }, ensure_ascii=False, indent=2))
@@ -243,19 +418,15 @@ def cmd_verify_gate(args: argparse.Namespace) -> int:
     gate_idx = gates_order.index(target_gate)
     failures: List[str] = []
 
-    # 1. Check sequential prerequisite gates P1..P_{k-1}
     for prev_gate in gates_order[:gate_idx]:
-        cert_file = ledger_dir / f"gate_{prev_gate}_certified.json"
-        if not cert_file.is_file():
-            failures.append(f"Porte précédente `{prev_gate}` non certifiée : impossible de franchir `{target_gate}` avant `{prev_gate}`.")
+        if not (ledger_dir / f"gate_{prev_gate}_certified.json").is_file():
+            failures.append(f"Prerequisite gate `{prev_gate}` is not certified; cannot certify `{target_gate}` out of sequence.")
 
-    # 2. Check Sacred Files SHA-256
     for rel, expected_sha in ledger.get("sacred_files_sha256", {}).items():
         fp = project_dir / rel
         if not fp.is_file() or file_sha256(fp) != expected_sha:
-            failures.append(f"VIOLATION FICHIER SACRÉ : `{rel}` a été altéré ou supprimé (SHA-256 invalide).")
+            failures.append(f"SACRED FILE VIOLATION: `{rel}` was modified or deleted (SHA-256 mismatch).")
 
-    # 3. Check ALL cumulative items up to and including `target_gate` (Zero Regression + Zero Amnesia)
     active_gates = set(gates_order[: gate_idx + 1])
     scope_items = [it for it in ledger["items"] if it["gate"] in active_gates]
     discovered_tests_now: Set[str] = set()
@@ -274,17 +445,15 @@ def cmd_verify_gate(args: argparse.Namespace) -> int:
             if not res_m["ok"]:
                 failures.append(f"[{it['id']} · {it['gate']}] {res_m['reason']}")
 
-    # 4. Indelible Cumulative Test Suite Check (forbid deleting any previously verified test_*)
     prev_indelible = set(ledger.get("indelible_verified_tests", []))
     missing_indelible = sorted(prev_indelible - discovered_tests_now)
     if missing_indelible:
-        failures.append(f"SUPPRESSION INTERDITE DE TESTS PRÉCÉDENTS (Suite Indélébile) : {missing_indelible}")
+        failures.append(f"INDELIBLE TEST SUITE VIOLATION — deleted prior certified tests: {missing_indelible}")
 
-    # 5. Execute real test runner command if CODE items are in scope
     test_cmd = str(ledger.get("test_command", "")).strip()
     if need_code_test_run and not failures:
         if not test_cmd:
-            failures.append("Aucune commande `test_command` définie dans le registre pour exécuter les tests CODE.")
+            failures.append("Missing `test_command` in ledger for executing CODE test suite.")
         else:
             proc = subprocess.run(
                 test_cmd, shell=True, cwd=str(project_dir),
@@ -292,29 +461,21 @@ def cmd_verify_gate(args: argparse.Namespace) -> int:
             )
             if proc.returncode != 0:
                 tail = (proc.stdout + "\n" + proc.stderr)[-1200:]
-                failures.append(f"Échec d'exécution réelle de la suite de tests (code {proc.returncode}) :\n{tail}")
+                failures.append(f"Test runner failed with exit code {proc.returncode}:\n{tail}")
 
     if failures:
-        print(json.dumps({
-            "gate": target_gate,
-            "status": "BLOCKED",
-            "failures_count": len(failures),
-            "failures": failures,
-        }, ensure_ascii=False, indent=2))
+        print(json.dumps({"gate": target_gate, "status": "BLOCKED", "failures_count": len(failures), "failures": failures}, ensure_ascii=False, indent=2))
         return 2
 
-    # 100% PASS -> Update ledger items, lock new indelible tests, and issue SHA-256 certificate!
     ts = now_iso()
     for it in scope_items:
         it["status"] = "VERIFIED"
         if not it.get("verified_at"):
             it["verified_at"] = ts
-
-    for it in scope_items:
         if it["mode"] == "CODE" and it.get("test_id"):
             prev_indelible.add(it["test_id"])
-    ledger["indelible_verified_tests"] = sorted(prev_indelible)
 
+    ledger["indelible_verified_tests"] = sorted(prev_indelible)
     tree_sha = compute_workspace_tree_sha256(project_dir, ledger.get("tracked_files") or None)
     cert = {
         "gate": target_gate,
@@ -326,9 +487,9 @@ def cmd_verify_gate(args: argparse.Namespace) -> int:
     }
     cert_path = ledger_dir / f"gate_{target_gate}_certified.json"
     cert_path.write_text(json.dumps(cert, ensure_ascii=False, indent=2), encoding="utf-8")
+
     g_certs = ledger.setdefault("gate_certificates", {})
     g_certs[target_gate] = cert
-    # Since verify-gate cumulatively re-validated all prerequisite gates P1..P_{k-1} on this exact tree, refresh their tree_sha256
     for prev_g in gates_order[:gate_idx]:
         if prev_g in g_certs:
             g_certs[prev_g]["tree_sha256"] = tree_sha
@@ -337,11 +498,13 @@ def cmd_verify_gate(args: argparse.Namespace) -> int:
                 json.dumps(g_certs[prev_g], ensure_ascii=False, indent=2), encoding="utf-8"
             )
     ledger_path.write_text(json.dumps(ledger, ensure_ascii=False, indent=2), encoding="utf-8")
+    anchor = compile_lossless_anchor(ledger_dir)
 
     print(json.dumps({
         "gate": target_gate,
         "status": "CERTIFIED_100_PCT",
         "certificate_path": str(cert_path),
+        "context_anchor_path": str(anchor),
         "tree_sha256": tree_sha,
         "verified_items_count": len(scope_items),
         "total_items_count": len(ledger["items"]),
@@ -371,28 +534,86 @@ def cmd_status(args: argparse.Namespace) -> int:
             "verified": f"{sum(1 for i in g_items if i['status'] == 'VERIFIED')}/{len(g_items)}",
         })
 
+    anchor = compile_lossless_anchor(ledger_dir)
     print(json.dumps({
         "project_name": ledger.get("project_name"),
         "mode": ledger.get("mode"),
         "domain": ledger.get("domain"),
         "live_tree_sha256": live_sha,
         "indelible_tests_count": len(ledger.get("indelible_verified_tests", [])),
+        "context_anchor_path": str(anchor),
         "gates": gate_states,
     }, ensure_ascii=False, indent=2))
     return 0
 
 
+def cmd_install_hooks(args: argparse.Namespace) -> int:
+    """ADD_01: Installs physical PreToolUse hook into <project-dir>/.agents/hooks.json safely."""
+    project_dir = Path(args.project_dir).resolve()
+    ledger_dir = Path(args.ledger_dir).resolve()
+    hooks_json_path = project_dir / ".agents" / "hooks.json"
+    guard_py_path = project_dir / ".agents" / "hooks" / "excom_pretool_guard.py"
+
+    if hooks_json_path.exists() and not args.force:
+        print(json.dumps({
+            "status": "SKIPPED_EXISTING_HOOKS_PROTECTED",
+            "reason": f"{hooks_json_path} already exists; refusing to overwrite bespoke project firewall without --force.",
+        }, ensure_ascii=False, indent=2))
+        return 0
+
+    guard_py_path.parent.mkdir(parents=True, exist_ok=True)
+    guard_code = (
+        PRETOOL_GUARD_TEMPLATE
+        .replace("__LEDGER_DIR__", str(ledger_dir))
+        .replace("__PROJECT_DIR__", str(project_dir))
+    )
+    guard_py_path.write_text(guard_code, encoding="utf-8")
+
+    hooks_cfg = {
+        "excom-zero-amnesia-firewall": {
+            "enabled": True,
+            "PreToolUse": [
+                {
+                    "matcher": "*",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "python .agents/hooks/excom_pretool_guard.py",
+                            "timeout": 10,
+                        }
+                    ],
+                }
+            ],
+        }
+    }
+    hooks_json_path.write_text(json.dumps(hooks_cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(json.dumps({
+        "status": "PRETOOL_FIREWALL_INSTALLED",
+        "hooks_json": str(hooks_json_path),
+        "guard_script": str(guard_py_path),
+    }, ensure_ascii=False, indent=2))
+    return 0
+
+
+def cmd_render_anchor(args: argparse.Namespace) -> int:
+    ledger_dir = Path(args.ledger_dir).resolve()
+    pmo_dir = Path(args.pmo_dir).resolve() if args.pmo_dir else None
+    out = compile_lossless_anchor(ledger_dir, pmo_dir=pmo_dir)
+    print(json.dumps({"status": "ANCHOR_COMPILED_LOSSLESS", "anchor_path": str(out)}, ensure_ascii=False, indent=2))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="ExCom v3.0 — Aeronautical Zéro-Oubli Lot & SHA-256 Gate Engine")
+    p = argparse.ArgumentParser(description="ExCom v3.1 — Aeronautical Lot, SHA-256 Gate, Hook & Lossless Anchor CLI")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    p_init = sub.add_parser("init-lot0", help="Initialize Lot 0 ledger and certify P0")
+    p_init = sub.add_parser("init-lot0", help="Initialize Lot 0 ledger, certify P0, and compile lossless anchor")
     p_init.add_argument("--project-dir", required=True)
     p_init.add_argument("--ledger-dir", required=True)
     p_init.add_argument("--spec", required=True)
     p_init.set_defaults(func=cmd_init_lot0)
 
-    p_ver = sub.add_parser("verify-gate", help="Verify all upstream/downstream checks for Gate Pk and sign SHA-256")
+    p_ver = sub.add_parser("verify-gate", help="Verify cumulative checks for Gate Pk and sign tree_sha256")
     p_ver.add_argument("--ledger-dir", required=True)
     p_ver.add_argument("--gate", required=True)
     p_ver.add_argument("--project-dir", default="")
@@ -402,6 +623,17 @@ def build_parser() -> argparse.ArgumentParser:
     p_st.add_argument("--ledger-dir", required=True)
     p_st.add_argument("--project-dir", default="")
     p_st.set_defaults(func=cmd_status)
+
+    p_hk = sub.add_parser("install-hooks", help="Install physical PreToolUse firewall on a new project")
+    p_hk.add_argument("--project-dir", required=True)
+    p_hk.add_argument("--ledger-dir", required=True)
+    p_hk.add_argument("--force", action="store_true")
+    p_hk.set_defaults(func=cmd_install_hooks)
+
+    p_an = sub.add_parser("render-anchor", help="Compile lossless primary-source CONTEXT_ANCHOR.md")
+    p_an.add_argument("--ledger-dir", required=True)
+    p_an.add_argument("--pmo-dir", default="")
+    p_an.set_defaults(func=cmd_render_anchor)
 
     return p
 

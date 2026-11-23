@@ -81,46 +81,46 @@ DOMAIN_PROFILES: Dict[str, Dict[str, Any]] = {
         "keywords": ["qcalgorithm", "quantconnect", "sharpe", "drawdown", "slippage", "backtest", "ccxt", "okx", "orderbook", "funding_rate", "margin"],
         "mass_balance_equation": "Gross_Signal_Alpha - Execution_Spread_Slippage - Commissions_Fees - Financing_Borrow_FX - Rejected_Or_Clipped_Orders == Net_Realized_PnL",
         "mandatory_brakes_checklist": [
-            "Parité stricte environnement recherche vs production/backtest (ex. Python vs C# / Live API)",
-            "Zéro double facturation ni omission de frais (spread, slippage, financement/funding, change)",
-            "Vérification des ordres bloqués, rejetés, inversés ou bridés par un plafond fixe",
-            "Viabilité du signal pur à zéro frais (> 0 avant toute retouche d'exécution)",
+            "Strict parity between research simulator and production/backtest runtime",
+            "Zero double-charging or omitted execution frictions (spread, slippage, funding/borrow, FX)",
+            "Audit of rejected, blocked, inverted, or artificially capped orders",
+            "Positive core signal viability at zero friction (> 0 before any execution tweak)",
         ],
     },
     "DATA_OR_ML_PIPELINE": {
         "keywords": ["bigquery", "pyspark", "dataframe", "sklearn", "torch", "xgboost", "lightgbm", "cross_val", "dbt", "dataform"],
         "mass_balance_equation": "Input_Rows_Or_Signal - Schema_Drops - Null_Filter_Losses - Leakage_Purge == Validated_Out_Of_Sample_Output",
         "mandatory_brakes_checklist": [
-            "Absence totale de fuite temporelle (look-ahead / train-test contamination)",
-            "Conservation du nombre de lignes et des sommes comptables à chaque jointure",
-            "Performance hors-échantillon supérieure à une baseline naïve sans hyperparamètres libres",
+            "Zero temporal look-ahead or train/test contamination",
+            "Row-count and accounting sum conservation across every join",
+            "Out-of-sample lift exceeding a zero-parameter naive baseline",
         ],
     },
     "WEB_OR_SAAS_APP": {
         "keywords": ["fastapi", "flask", "django", "react", "nextjs", "stripe", "prisma", "sqlalchemy", "endpoint", "middleware"],
         "mass_balance_equation": "Total_Requests_Or_Latency == Auth_Time + Validation + DB_Query_Time + External_API_Time + Render_Time",
         "mandatory_brakes_checklist": [
-            "Reproduction déterministe de l'erreur ou du goulot d'étranglement par sonde mesurée",
-            "Intégrité transactionnelle et idempotence des écritures / paiements",
-            "Zéro contournement de sécurité ou d'authentification",
+            "Deterministic reproduction of error or latency bottleneck via measured probe",
+            "Transactional integrity and write/payment idempotency",
+            "Zero authentication or permission boundary bypass",
         ],
     },
     "GENERAL_SOFTWARE": {
         "keywords": [],
         "mass_balance_equation": "Observed_Defect_Or_Gap == Sum(Measured_Root_Causes) [>= 80% explained before any code edit]",
         "mandatory_brakes_checklist": [
-            "Reproduction déterministe mesurée par script avant toute hypothèse",
-            "Test d'ablation (suppression des rustines existantes) avant ajout de complexité",
-            "Zéro constante arbitraire ni empilement conditionnel non justifié",
+            "Deterministic script reproduction measured on disk before any hypothesis",
+            "Ablation check (removing legacy band-aids) before adding new conditional branches",
+            "Zero arbitrary magic literals or unjustified boolean sprawl",
         ],
     },
     "NON_CODE_METIER": {
         "keywords": [],
         "mass_balance_equation": "Total_Project_Outcome == Net_Value_Drivers - TCO_All_In_Costs - Legal_Tax_Friction - Operational_LeadTime_Risk",
         "mandatory_brakes_checklist": [
-            "Sources légales, fiscales ou devis fournisseurs réels vérifiés (zéro hypothèse verbale)",
-            "Chiffrage complet des coûts cachés et frictions avant tout engagement irréversible",
-            "Complétude 100 % des clauses et garde-fous non-négociables dans chaque acte ou livrable",
+            "Dated, verifiable statutory, regulatory, or vendor-quote sources (zero verbal guesswork)",
+            "Full all-in TCO and hidden-friction model executed via script before irreversible commitment",
+            "100% presence of mandatory protective clauses across every legal/operational deliverable",
         ],
     },
 }
@@ -470,7 +470,7 @@ def compute_drift(current: Dict[str, Any], baseline: Optional[Dict[str, Any]]) -
             "modified_modules": [],
             "ratchet_violations": [],
             "auto_generated_probe_requirements": [
-                f"Initialiser une sonde déterministe couvrant {m}" for m in current["unprobed_critical_modules"][:10]
+                f"Initialize deterministic probe covering `{m}`" for m in current["unprobed_critical_modules"][:10]
             ],
         }
 
@@ -486,25 +486,25 @@ def compute_drift(current: Dict[str, Any], baseline: Optional[Dict[str, Any]]) -
 
     violations: List[str] = []
     for key, label in (
-        ("boolean_hotspots", "Arbres booléens géants (>=6 clauses / rustines)"),
-        ("entity_exceptions", "Exceptions nominatives par actif/ticker dans les formules"),
-        ("fixed_caps", "Plafonds entiers fixes bridant le passage à l'échelle"),
-        ("magic_literals", "Constantes numériques libres (magic numbers) dans la logique"),
+        ("boolean_hotspots", "Boolean sprawl hotspots (>=6 clauses / band-aids)"),
+        ("entity_exceptions", "Hardcoded entity/ticker cherry-picks in core logic"),
+        ("fixed_caps", "Fixed integer slice caps restricting scalability"),
+        ("magic_literals", "Free numeric magic literals inside functions"),
     ):
         prev_max = int(old_t.get(key, 0))
         now_val = int(cur_t.get(key, 0))
         if now_val > prev_max:
-            violations.append(f"VIOLATION CLIQUET [{label}] : passé de {prev_max} à {now_val} (+{now_val - prev_max})")
+            violations.append(f"RATCHET VIOLATION [{label}]: increased from {prev_max} to {now_val} (+{now_val - prev_max})")
 
     auto_reqs: List[str] = []
     for m in added:
         role = cur_files[m]["role"]
         if role != "PROBES_AND_TESTS":
-            auto_reqs.append(f"Nouveau module détecté '{m}' ({role}) : sonde de vérification & parité requise avant mise en prod.")
+            auto_reqs.append(f"New module detected '{m}' ({role}): deterministic verification probe required before production.")
     if domain_changed:
         auto_reqs.append(
-            f"Mutation de domaine détectée ({baseline.get('detected_domain')} -> {current.get('detected_domain')}) : "
-            f"nouvelle équation de conservation activée automatiquement."
+            f"Domain shift detected ({baseline.get('detected_domain')} -> {current.get('detected_domain')}): "
+            f"updated conservation equation activated automatically."
         )
 
     return {
@@ -631,13 +631,13 @@ def cmd_diff_audit(args: argparse.Namespace) -> int:
         d_cap = len(cur_ast["fixed_caps"]) - len(old_ast["fixed_caps"])
 
         if d_bool > 0:
-            violations.append(f"{rel}: +{d_bool} arbre(s) booléen(s) géant(s) (>=6 clauses)")
+            violations.append(f"{rel}: +{d_bool} giant boolean tree(s) (>=6 clauses)")
         if d_ent > 0:
-            violations.append(f"{rel}: +{d_ent} exception(s) nominative(s) par ticker/entité")
+            violations.append(f"{rel}: +{d_ent} hardcoded entity/ticker exception(s)")
         if d_cap > 0:
-            violations.append(f"{rel}: +{d_cap} plafond(s) entier(s) fixe(s)")
+            violations.append(f"{rel}: +{d_cap} fixed integer slice cap(s)")
         if d_mag > 0:
-            violations.append(f"{rel}: +{d_mag} constante(s) numérique(s) libre(s) ajoutée(s)")
+            violations.append(f"{rel}: +{d_mag} free numeric magic literal(s) added")
 
         file_audits.append({
             "file": rel,
@@ -691,42 +691,42 @@ def cmd_autopsy_gate(args: argparse.Namespace) -> int:
         or (mechanical_share_pct >= 15.0 and max_residual_stake_pct >= 5.0)
     )
 
-    lines: List[str] = [f"## Diagnostic Déterministe RootCause — `{project_name}`", ""]
+    lines: List[str] = [f"## RootCause Deterministic Autopsy — `{project_name}`", ""]
 
     # Hard Block 1: No disk probe
     if not probe_verified:
-        lines.append("> **❌ BLOQUÉ (PORTE A1 — ZÉRO PREUVE DISQUE)** : Le script de sonde ou son fichier de sortie n'existe pas sur le disque. Interdiction absolue de diagnostiquer de tête ou de proposer un correctif avant exécution d'une sonde réelle.")
+        lines.append("> **❌ BLOCKED (GATE A1 — MISSING DISK PROBE)** : Probe script or output file does not exist on disk. Diagnosing from code reading alone is strictly prohibited.")
         print("\n".join(lines))
         return 2
 
     # Hard Block 2: < 80% explained
     if total_gap > 1e-9 and explained_pct < 80.0:
-        lines.append(f"> **❌ BLOQUÉ (PORTE A2 — AUTOPSIE INCOMPLÈTE : `{explained_pct} %` expliqués < `80 %` requis)** : Les causes mesurées n'expliquent pas encore la vraie racine du problème. Interdiction de poser une rustine : affinez l'instrumentation pour localiser la perte manquante.")
+        lines.append(f"> **❌ BLOCKED (GATE A2 — INCOMPLETE AUTOPSY: `{explained_pct}%` explained < `80%` required)** : Measured components do not yet isolate the true root cause. Refine telemetry before proposing any code change.")
         print("\n".join(lines))
         return 2
 
     # Hard Block 3: Dead foundation even at zero friction
     if core_viability <= 0.0:
-        lines.append(f"> **🛑 ALERTE FONDATION DÉFICITAIRE À NU (`viabilité hors frais = {core_viability} <= 0`)** : La brique centrale perd déjà avant même les frais ou frictions d'exécution. **Interdiction formelle d'empiler des filtres ou rustines dessus.** Seules décisions valides : **Supprimer la brique (Ablation)** ou **Refondre l'architecture à la base**.")
+        lines.append(f"> **🛑 DEAD FOUNDATION AT ZERO FRICTION (`zero-friction viability = {core_viability} <= 0`)** : The core brick fails even before execution costs/frictions. **Adding filters or band-aids is strictly prohibited.** Valid actions: **Ablation (Delete)** or **Ground-Up Redesign**.")
         print("\n".join(lines))
         return 0
 
     # Hard Gate B: Mandatory STOP / Anti-Overfitting on 2nd+ verification pass
     if not has_mechanical_brakes and max_residual_stake_pct < 5.0:
-        lines.append(f"> **🛑 VERDICT SOUVERAIN : STOP — NE PLUS RIEN TOUCHER** (`enjeu résiduel max = {max_residual_stake_pct:.1f} % < 5 %`, `0` frein mécanique ouvert, fondation saine à nu).")
-        lines.append("> *Toute modification supplémentaire à ce stade serait de la suroptimisation (overfitting) ou du bruit périphérique. Gel du code recommandé.*")
+        lines.append(f"> **🛑 SOVEREIGN VERDICT: STOP — DO NOT TOUCH** (`max residual stake = {max_residual_stake_pct:.1f}% < 5.0%`, `0` open mechanical brake, healthy core foundation).")
+        lines.append("> *Any further modification at this stage introduces overfitting or peripheral churn. Code freeze recommended.*")
         print("\n".join(lines))
         return 0
 
-    lines.append(f"- **Preuve disque vérifiée** : `{probe_script.name}` → `{probe_output.name}` (`{explained_pct} %` de l'écart expliqué)")
-    lines.append(f"- **Viabilité de la fondation à nu (zéro friction)** : `POSITIVE ({core_viability})`")
-    lines.append(f"- **Freins mécaniques / exécution actifs** : `{has_mechanical_brakes}` (`{mechanical_share_pct} %` du problème vient des freins mécaniques)")
+    lines.append(f"- **Verified Disk Probe** : `{probe_script.name}` → `{probe_output.name}` (`{explained_pct}%` of gap explained)")
+    lines.append(f"- **Zero-Friction Core Viability** : `POSITIVE ({core_viability})`")
+    lines.append(f"- **Active Mechanical Brakes** : `{has_mechanical_brakes}` (`{mechanical_share_pct}%` of gap from mechanical frictions)")
     lines.append("")
 
     if args.proposals and Path(args.proposals).is_file():
         prop_data = json.loads(Path(args.proposals).read_text(encoding="utf-8"))
         proposals = prop_data.get("proposals", [])
-        lines.append("| ID | Proposition | `C1` Sonde & Cœur Intact | `C2` Freins D'abord | `C3` Zéro Param/Rustine | `C4` Enjeu >= 5% | Ablation Vérifiée | Verdict |")
+        lines.append("| ID | Proposal | `C1` Probe & Intact Core | `C2` Brakes First | `C3` Zero Magic/Patch | `C4` Stake >= 5% | Ablation Checked | Verdict |")
         lines.append("| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- |")
         for p in proposals:
             kind = str(p.get("kind", "CORE_FORMULA")).upper()
@@ -744,13 +744,13 @@ def cmd_autopsy_gate(args: argparse.Namespace) -> int:
             c4 = (stake >= 5.0) or blocks_gate
 
             if not c1 or not c2 or not c3:
-                verdict = "❌ BLOQUÉ (RUSTINE / SURENCHÈRE)"
+                verdict = "❌ BLOCKED (OVERKILL / PATCH)"
             elif not ablation_ok and bool(autopsy.get("target_module_has_hotspots", False)):
-                verdict = "⚠️ TESTER D'ABORD EN ABLATION"
+                verdict = "⚠️ RUN ABLATION TEST FIRST"
             elif c4:
-                verdict = "✅ FONDÉ & CRITIQUE"
+                verdict = "✅ VALIDATED & CRITICAL"
             else:
-                verdict = "⚠️ MINEUR (OPTIONNEL)"
+                verdict = "⚠️ VALIDATED — MINOR"
 
             lines.append(
                 f"| **`{p.get('id', 'FIX')}`** | **{p.get('title', '')}**<br>*({plain})* | "

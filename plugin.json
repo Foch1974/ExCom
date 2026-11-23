@@ -1,12 +1,12 @@
 {
   "name": "excom",
   "displayName": "ExCom",
-  "version": "3.0.0",
-  "description": "Vertical 25-Role Executive & Aeronautical Engineering OS: Exhaustive Intake, Upfront Porte 0 Decision Matrix (✅/⚠️/❌/🛑 STOP), >=80% Root-Cause Autopsy, Zéro-Oubli Lots & SHA-256 Gates, CPM/EVM Control Tower, and Cross-Director Contagion Bus.",
+  "version": "3.1.0",
+  "description": "Vertical 25-Role Executive & Aeronautical Engineering OS: Upfront Gate 0 Decision Matrix (✅/⚠️/❌/🛑 STOP), >=80% Root-Cause Autopsy, Dead-End Anti-Loop, Physical PreToolUse Hooks, Lossless Context Anchor, SHA-256 Gates & CPM/EVM Control Tower.",
   "logo": "assets/logo.svg",
   "suggestedPrompts": [
-    "Frame a new business or personal investment project with ExCom and show me the Porte 0 Decision Matrix",
-    "Run a Root-Cause 80% autopsy and Porte 0 audit on an underperforming strategy or codebase",
-    "Execute our approved Porte 0 items under the Aeronautical Zéro-Oubli Lot & SHA-256 Gate protocol"
+    "Frame a new business or personal investment project with ExCom and show me the Gate 0 Decision Matrix",
+    "Run a Root-Cause 80% autopsy and Gate 0 audit on an underperforming strategy or codebase",
+    "Execute our approved Gate 0 items under the Aeronautical Zero-Amnesia Lot & SHA-256 Gate protocol"
   ]
 }

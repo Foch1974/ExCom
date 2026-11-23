@@ -382,7 +382,7 @@ def run_contagion_radar(state: Dict[str, Any], project_dir: Optional[Path] = Non
                 for c_seat in other.get("coupled_seats", {}).keys():
                     downstream_seats.append(c_seat)
             severity = "CRITICAL" if comp.get("is_critical") else "WARNING"
-            cascade_desc = ", ".join(f"{d_id} ({by_id[d_id].get('owner_seat', 'PMO')})" for d_id in desc_ids) or "Clôture projet"
+            cascade_desc = ", ".join(f"{d_id} ({by_id[d_id].get('owner_seat', 'PMO')})" for d_id in desc_ids) or "Project Completion"
             register_alert(
                 fingerprint=f"ROOT_SLIP:{tid}:{int(round(own_slip))}",
                 severity=severity,
@@ -390,9 +390,9 @@ def run_contagion_radar(state: Dict[str, Any], project_dir: Optional[Path] = Non
                 source_seat=owner,
                 target_seats=downstream_seats + ["PMO", "COO"],
                 task_id=tid,
-                title=f"Contagion planning amont depuis {tid} (+{own_slip}j) → cascade sur {cascade_desc}",
-                upstream_cause=f"Le chantier source '{t['name']}' ({owner}) s'allonge de +{own_slip}j ({'Chemin Critique : décalage direct de la date de fin' if comp.get('is_critical') else 'Érosion de marge libre'}).",
-                preventive_action="Anticiper dès maintenant les prérequis des Directeurs aval impactés (pré-remplissage KYC/statuts/scripts) pour absorber le glissement sans retarder le Go-Live.",
+                title=f"Upstream schedule slip on {tid} (+{own_slip}d) -> cascading into {cascade_desc}",
+                upstream_cause=f"Source workstream '{t['name']}' ({owner}) extended by +{own_slip}d ({'Critical Path: shifts target completion date' if comp.get('is_critical') else 'Float erosion'}).",
+                preventive_action="Pre-stage prerequisites for impacted downstream Directors in parallel to absorb the slip before Go-Live.",
             )
 
         if comp.get("is_overdue"):
@@ -403,15 +403,16 @@ def run_contagion_radar(state: Dict[str, Any], project_dir: Optional[Path] = Non
                 source_seat=owner,
                 target_seats=["PMO", "COO"] + list(t.get("coupled_seats", {}).keys()),
                 task_id=tid,
-                title=f"Échéance dépassée sur {tid} ({t['name']})",
-                upstream_cause=f"Date cible {comp.get('forecast_end')} dépassée à {t.get('progress_pct', 0)}% d'avancement.",
-                preventive_action=f"Convoquer un CoPil flash PMO + {owner} pour débloquer ou re-séquencer.",
+                title=f"Past-due milestone on {tid} ({t['name']})",
+                upstream_cause=f"Forecast finish {comp.get('forecast_end')} passed at {t.get('progress_pct', 0)}% completion.",
+                preventive_action=f"Convene flash Steering Check with PMO + {owner} to unblock or re-sequence.",
             )
 
         # Cost / Commitment overrun contagion -> CFO + CRO-Risk + coupled seats
         if overrun > 0 and (planned_b == 0 or (overrun / max(1.0, planned_b)) >= 0.10):
             pct = round((overrun / planned_b) * 100.0, 1) if planned_b > 0 else 100.0
             sev = "CRITICAL" if pct >= 25.0 else "WARNING"
+            ccy = state.get("currency", "USD")
             register_alert(
                 fingerprint=f"COST:{tid}:{int(overrun)}",
                 severity=sev,
@@ -419,9 +420,9 @@ def run_contagion_radar(state: Dict[str, Any], project_dir: Optional[Path] = Non
                 source_seat=owner,
                 target_seats=["CFO", "CRO-Risk", "PMO"] + list(t.get("coupled_seats", {}).keys()),
                 task_id=tid,
-                title=f"Dépassement budgétaire amont sur {tid} (+{overrun:,.0f} € / +{pct}%)",
-                upstream_cause=f"Coût engagé/réel ({comp.get('committed_cost'):,.0f} €) supérieur à l'enveloppe votée ({planned_b:,.0f} €) sur '{t['name']}'.",
-                preventive_action="Audit CFO immédiat sur l'enveloppe de contingence et vérification des Kill Criteria avec CRO-Risk.",
+                title=f"Upstream budget overrun on {tid} (+{overrun:,.0f} {ccy} / +{pct}%)",
+                upstream_cause=f"Committed/actual spend ({comp.get('committed_cost'):,.0f} {ccy}) exceeds baseline budget ({planned_b:,.0f} {ccy}) on '{t['name']}'.",
+                preventive_action="Immediate CFO contingency review and CRO-Risk check against pre-committed Kill Criteria.",
             )
 
         # Blocked status contagion
@@ -433,23 +434,24 @@ def run_contagion_radar(state: Dict[str, Any], project_dir: Optional[Path] = Non
                 source_seat=owner,
                 target_seats=["PMO", "CEO", "COO"] + list(t.get("coupled_seats", {}).keys()),
                 task_id=tid,
-                title=f"Blocage critique déclaré sur {tid} ({t['name']})",
-                upstream_cause=t.get("notes", "Blocage opérationnel signalé par le porteur."),
-                preventive_action="Escalade immédiate aux Directeurs couplés et arbitrage CEO si verrou externe.",
+                title=f"Critical blocker declared on {tid} ({t['name']})",
+                upstream_cause=t.get("notes", "Operational blocker flagged by task owner."),
+                preventive_action="Escalate immediately to coupled Directors and CEO for arbitration.",
             )
 
     # 2. Global EVM CPI / SPI drift check
     evm = state.get("metrics", {}).get("evm", {})
     if evm.get("ac_eur", 0) > 0 and evm.get("cpi", 1.0) < 0.90:
+        ccy = state.get("currency", "USD")
         register_alert(
             fingerprint=f"EVM_CPI:{evm['cpi']}",
             severity="CRITICAL" if evm["cpi"] < 0.80 else "WARNING",
             category="COST",
             source_seat="PMO",
             target_seats=["CFO", "CRO-Risk", "CEO"],
-            title=f"Alerte EVM : Efficience budgétaire dégradée (CPI = {evm['cpi']})",
-            upstream_cause=f"Projection finale EAC à {evm['eac_eur']:,.0f} € contre un budget BAC de {evm['bac_eur']:,.0f} €.",
-            preventive_action="Gel des engagements non critiques par le CFO et revue de périmètre CPO/COO.",
+            title=f"EVM Alert: Degraded Cost Performance Index (CPI = {evm['cpi']})",
+            upstream_cause=f"Projected EAC at {evm['eac_eur']:,.0f} {ccy} vs baseline BAC of {evm['bac_eur']:,.0f} {ccy}.",
+            preventive_action="Freeze non-critical spend with CFO and cut non-essential scope with CPO/COO.",
         )
 
     # Update overall RAG health
@@ -523,6 +525,7 @@ def render_dashboard_html(project_dir: Path, state: Dict[str, Any]) -> Path:
     guardrails = state.get("guardrails", [])
     kill_criteria = state.get("kill_criteria", [])
     deliverables = state.get("deliverables", [])
+    ccy = html.escape(str(state.get("currency", "USD")))
 
     total_days = max(1.0, float(m.get("forecast_duration_days", 1.0)), float(m.get("baseline_duration_days", 1.0)))
     rag = state.get("overall_rag", "GREEN")
@@ -537,7 +540,7 @@ def render_dashboard_html(project_dir: Path, state: Dict[str, Any]) -> Path:
         a.get("source_seat", "PMO") for a in open_alerts
     })
 
-    seat_buttons = ['<button class="chip active" onclick="filterSeat(\'ALL\', this)">Tous (360°)</button>']
+    seat_buttons = ['<button class="chip active" onclick="filterSeat(\'ALL\', this)">All Seats (360°)</button>']
     for s in seats:
         esc = html.escape(s)
         seat_buttons.append(f'<button class="chip" onclick="filterSeat(\'{esc}\', this)">{esc}</button>')
@@ -557,8 +560,8 @@ def render_dashboard_html(project_dir: Path, state: Dict[str, Any]) -> Path:
             bar_cls = "gantt-bar done"
         coupled = list(t.get("coupled_seats", {}).keys())
         seat_tags = " ".join([t.get("owner_seat", "PMO")] + coupled)
-        slip_badge = f'<span class="badge red">+{c.get("slip_days")}j</span>' if float(c.get("slip_days", 0)) > 0 else ""
-        crit_badge = '<span class="badge crit-b">CRITIQUE</span>' if is_crit else f'<span class="badge muted">Marge {c.get("total_float_days")}j</span>'
+        slip_badge = f'<span class="badge red">+{c.get("slip_days")}d</span>' if float(c.get("slip_days", 0)) > 0 else ""
+        crit_badge = '<span class="badge crit-b">CRITICAL</span>' if is_crit else f'<span class="badge muted">Float {c.get("total_float_days")}d</span>'
 
         gantt_rows.append(f"""
         <div class="gantt-row seat-item" data-seats="{html.escape(seat_tags)}">
@@ -571,7 +574,7 @@ def render_dashboard_html(project_dir: Path, state: Dict[str, Any]) -> Path:
             </div>
           </div>
           <div class="gantt-track">
-            <div class="gantt-baseline" style="left:{base_left}%;width:{base_width}%" title="Baseline initiale"></div>
+            <div class="gantt-baseline" style="left:{base_left}%;width:{base_width}%" title="Initial Baseline"></div>
             <div class="{bar_cls}" style="left:{left_pct}%;width:{width_pct}%">
               <div class="gantt-fill" style="width:{prog}%"></div>
               <span class="gantt-label">{int(prog)}%</span>
@@ -591,16 +594,16 @@ def render_dashboard_html(project_dir: Path, state: Dict[str, Any]) -> Path:
         <div class="alert-card {sev_cls} seat-item" data-seats="{html.escape(seat_tags)}">
           <div class="alert-head">
             <span class="badge {'red' if sev == 'CRITICAL' else 'amber'}">{html.escape(sev)} · {html.escape(a.get('category', ''))}</span>
-            <span class="seat-pill">Source : {html.escape(a.get('source_seat', ''))}</span>
+            <span class="seat-pill">Source: {html.escape(a.get('source_seat', ''))}</span>
             {target_pills}
             <span class="muted-id">{html.escape(a['id'])}</span>
           </div>
           <h4>{html.escape(a.get('title', ''))}</h4>
-          <p><strong>Origine amont :</strong> {html.escape(a.get('upstream_cause', ''))}</p>
-          <p class="action-line"><strong>Parade inter-périmètres requise :</strong> {html.escape(a.get('preventive_action', ''))}</p>
+          <p><strong>Upstream Cause:</strong> {html.escape(a.get('upstream_cause', ''))}</p>
+          <p class="action-line"><strong>Required Cross-Perimeter Countermeasure:</strong> {html.escape(a.get('preventive_action', ''))}</p>
         </div>""")
     if not alert_cards:
-        alert_cards.append('<div class="empty-ok">Aucune alerte de contagion inter-périmètres ouverte — tous les couplages Directeurs sont au vert.</div>')
+        alert_cards.append('<div class="empty-ok">No open cross-perimeter contagion alerts — all C-Suite couplings are green.</div>')
 
     # Budget table rows
     budget_rows = []
@@ -610,14 +613,14 @@ def render_dashboard_html(project_dir: Path, state: Dict[str, Any]) -> Path:
         committed = float(c.get("committed_cost", 0.0))
         actual = float(t.get("actual_cost", 0.0))
         over = float(c.get("budget_overrun_eur", 0.0))
-        over_html = f'<span class="badge red">+{over:,.0f} €</span>' if over > 0 else '<span class="badge green">OK</span>'
+        over_html = f'<span class="badge red">+{over:,.0f} {ccy}</span>' if over > 0 else '<span class="badge green">OK</span>'
         budget_rows.append(f"""
         <tr class="seat-item" data-seats="{html.escape(t.get('owner_seat', 'PMO'))} CFO">
           <td><strong>{html.escape(t['id'])}</strong> — {html.escape(t['name'])}</td>
           <td><span class="seat-pill">{html.escape(t.get('owner_seat', 'PMO'))}</span></td>
-          <td class="num">{planned:,.0f} €</td>
-          <td class="num">{committed:,.0f} €</td>
-          <td class="num">{actual:,.0f} €</td>
+          <td class="num">{planned:,.0f} {ccy}</td>
+          <td class="num">{committed:,.0f} {ccy}</td>
+          <td class="num">{actual:,.0f} {ccy}</td>
           <td>{over_html}</td>
         </tr>""")
 
@@ -640,7 +643,7 @@ def render_dashboard_html(project_dir: Path, state: Dict[str, Any]) -> Path:
         kc_items.append(f"""
         <li class="seat-item" data-seats="{html.escape(k.get('owner_seat', 'CRO-Risk'))} CEO PMO">
           <span class="badge {cls}">{html.escape(st)}</span>
-          <strong>{html.escape(k.get('phase', ''))} :</strong> {html.escape(k.get('trigger', ''))}
+          <strong>{html.escape(k.get('phase', ''))}:</strong> {html.escape(k.get('trigger', ''))}
           <em>→ {html.escape(k.get('action', ''))}</em>
         </li>""")
 
@@ -654,11 +657,11 @@ def render_dashboard_html(project_dir: Path, state: Dict[str, Any]) -> Path:
         </li>""")
 
     doc = f"""<!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>ExCom Control Tower — {html.escape(state.get('project_name', 'Projet'))}</title>
+<title>ExCom Control Tower — {html.escape(state.get('project_name', 'Project'))}</title>
 <style>
   :root {{
     --bg: #0b1120; --panel: #111827; --panel2: #1e293b; --border: #334155;
@@ -729,77 +732,77 @@ def render_dashboard_html(project_dir: Path, state: Dict[str, Any]) -> Path:
     <div>
       <h1>ExCom 360° Control Tower — {html.escape(state.get('project_name', ''))}</h1>
       <div style="color:var(--muted);font-size:0.88rem;">
-        Décision verrouillée : {html.escape(state.get('locked_decision', ''))} · Point arrêté au <strong>{html.escape(m.get('as_of_date', ''))}</strong>
+        Locked Ruling: {html.escape(state.get('locked_decision', ''))} · As of <strong>{html.escape(m.get('as_of_date', ''))}</strong>
       </div>
     </div>
-    <div class="rag-pill">STATUT GLOBAL : {html.escape(rag)} · {len(open_alerts)} Alerte(s) Active(s)</div>
+    <div class="rag-pill">OVERALL STATUS: {html.escape(rag)} · {len(open_alerts)} Active Alert(s)</div>
   </header>
 
   <div class="kpis">
     <div class="kpi">
-      <div class="lbl">Avancement Pondéré (EV)</div>
+      <div class="lbl">Earned Progress (EV)</div>
       <div class="val">{m.get('overall_progress_pct', 0)}%</div>
-      <div class="sub">SPI Planning : <strong>{evm.get('spi', 1.0)}</strong></div>
+      <div class="sub">Schedule Index (SPI): <strong>{evm.get('spi', 1.0)}</strong></div>
     </div>
     <div class="kpi">
-      <div class="lbl">Horizon & Chemin Critique</div>
-      <div class="val">{m.get('forecast_duration_days', 0)} j</div>
-      <div class="sub">Fin prévue : {html.escape(m.get('forecast_end_date', ''))} (P85: {m.get('p85_duration_days', 0)}j)</div>
+      <div class="lbl">Horizon &amp; Critical Path</div>
+      <div class="val">{m.get('forecast_duration_days', 0)} d</div>
+      <div class="sub">Forecast End: {html.escape(m.get('forecast_end_date', ''))} (P85: {m.get('p85_duration_days', 0)}d)</div>
     </div>
     <div class="kpi">
-      <div class="lbl">Budget CAPEX Amorçage (BAC)</div>
-      <div class="val">{evm.get('bac_eur', 0):,.0f} €</div>
-      <div class="sub">+ Contingence : {evm.get('contingency_eur', 0):,.0f} € · Engagé : {evm.get('committed_eur', 0):,.0f} €</div>
+      <div class="lbl">Baseline CAPEX (BAC)</div>
+      <div class="val">{evm.get('bac_eur', 0):,.0f} {ccy}</div>
+      <div class="sub">+ Contingency: {evm.get('contingency_eur', 0):,.0f} {ccy} · Committed: {evm.get('committed_eur', 0):,.0f} {ccy}</div>
     </div>
     <div class="kpi">
-      <div class="lbl">Efficience Coûts (CPI / EAC)</div>
+      <div class="lbl">Cost Efficiency (CPI / EAC)</div>
       <div class="val">CPI {evm.get('cpi', 1.0)}</div>
-      <div class="sub">Atterrissage EAC : {evm.get('eac_eur', 0):,.0f} € · OPEX/an : {evm.get('recurring_annual_opex_eur', 0):,.0f} €</div>
+      <div class="sub">Forecast EAC: {evm.get('eac_eur', 0):,.0f} {ccy} · Annual OPEX: {evm.get('recurring_annual_opex_eur', 0):,.0f} {ccy}</div>
     </div>
     <div class="kpi">
-      <div class="lbl">Contagion Inter-Périmètres</div>
+      <div class="lbl">Cross-Perimeter Contagion</div>
       <div class="val">{len(open_alerts)}</div>
-      <div class="sub">Chemin critique : {html.escape(' → '.join(m.get('critical_path', [])))}</div>
+      <div class="sub">Critical Path: {html.escape(' → '.join(m.get('critical_path', [])))}</div>
     </div>
   </div>
 
   <div class="filter-bar">
-    <span style="font-size:0.84rem;color:var(--muted);font-weight:600;">Filtrer par Directeur / Périmètre :</span>
+    <span style="font-size:0.84rem;color:var(--muted);font-weight:600;">Filter by Director / Perimeter:</span>
     {''.join(seat_buttons)}
   </div>
 
   <section>
-    <h2><span>Radar d'Alertes &amp; Contagion Amont Inter-Directeurs</span><span style="font-size:0.8rem;color:var(--muted);">Propagation temps réel</span></h2>
+    <h2><span>Upstream Cross-Director Contagion &amp; Alert Radar</span><span style="font-size:0.8rem;color:var(--muted);">Real-time DAG propagation</span></h2>
     {''.join(alert_cards)}
   </section>
 
   <section>
-    <h2><span>Rétroplanning Gantt CPM &amp; Marges (Baseline grise vs Prévision)</span><span style="font-size:0.8rem;color:var(--muted);">Durée totale : {m.get('forecast_duration_days', 0)} jours</span></h2>
+    <h2><span>CPM Critical-Path Gantt &amp; Float (Gray Baseline vs Forecast)</span><span style="font-size:0.8rem;color:var(--muted);">Total Duration: {m.get('forecast_duration_days', 0)} days</span></h2>
     {''.join(gantt_rows)}
   </section>
 
   <section>
-    <h2><span>Pilotage Budgétaire CFO &amp; Engagement par Chantier</span><span style="font-size:0.8rem;color:var(--muted);">Enveloppe totale av. contingence : {evm.get('total_envelope_eur', 0):,.0f} €</span></h2>
+    <h2><span>CFO Budget &amp; EVM Control by Workstream</span><span style="font-size:0.8rem;color:var(--muted);">Total Envelope incl. Contingency: {evm.get('total_envelope_eur', 0):,.0f} {ccy}</span></h2>
     <table>
-      <thead><tr><th>Chantier</th><th>Porteur</th><th>Budget Voté</th><th>Engagé / Devis</th><th>Décaissé (AC)</th><th>Écart</th></tr></thead>
+      <thead><tr><th>Workstream</th><th>Owner</th><th>Planned Budget</th><th>Committed / Quoted</th><th>Actual Spend (AC)</th><th>Variance</th></tr></thead>
       <tbody>{''.join(budget_rows)}</tbody>
     </table>
   </section>
 
   <div class="grid-2">
     <section>
-      <h2><span>Garde-Fous Non-Négociables ExCom</span></h2>
+      <h2><span>Non-Negotiable ExCom Guardrails</span></h2>
       <ul class="clean">{''.join(gr_items)}</ul>
     </section>
     <section>
-      <h2><span>Kill Criteria Pré-Engagés (Arrêt Auto)</span></h2>
+      <h2><span>Pre-Committed Hard Kill Criteria</span></h2>
       <ul class="clean">{''.join(kc_items)}</ul>
     </section>
   </div>
 
   <section>
-    <h2><span>Livrables Métiers Produits par les Directeurs</span></h2>
-    <ul class="clean">{''.join(deliv_items) if deliv_items else '<li>Aucun livrable enregistré pour le moment.</li>'}</ul>
+    <h2><span>Registered C-Suite Deliverables</span></h2>
+    <ul class="clean">{''.join(deliv_items) if deliv_items else '<li>No deliverables registered yet.</li>'}</ul>
   </section>
 </div>
 <script>

@@ -6,7 +6,7 @@
 
 - **Native Agent Tools Used**: `search_web` (current statutory articles, case law, tax bofip/codes), `read_file` (contract inspection), `write_file` (full draft deeds & clauses).
 - **SOTA 2026 Feature Suite**:
-  1. **360° Tailored Instrument Pre-Drafter**: Drafts structured, clause-by-clause preparatory deeds embedding every ExCom risk guardrail—e.g., Articles of Association (*Statuts SASU/Holding* with exact corporate purpose, zero third-party funds lock, unpaid presidency powers), Shareholder Loan Agreements (*Convention de Compte Courant d'Associé* with repayment/interest mechanics), IP Ownership/Licensing Deeds, NDAs, and MSAs.
+  1. **360° Tailored Instrument Pre-Drafter**: Drafts structured, clause-by-clause preparatory deeds embedding every ExCom risk guardrail—e.g., Articles of Incorporation / Bylaws (with exact corporate purpose, zero third-party funds lock, unpaid officer powers), Shareholder Loan Agreements (with repayment/interest mechanics), IP Assignment/Licensing Deeds, NDAs, and MSAs.
   2. **Adversarial Contract Redliner & Liability Cap Scanner**: Audits broker, vendor, lease, or client T&Cs line-by-line to flag unlimited personal guarantees, cross-default clauses, silent IP grabs, unilateral fee hikes, or hostile arbitration venues.
   3. **Surgical Counsel Briefing Pack**: Compresses external lawyer/notary review costs by 60–80% by delivering pre-structured drafts plus the exact 3–5 high-stakes statutory questions requiring local bar sign-off.
 - **Standard Deliverables (`deliverables/CLO_*`)**:

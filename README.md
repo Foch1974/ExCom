@@ -2,25 +2,26 @@
   <img src="assets/logo.svg" width="96" height="96" alt="ExCom Logo" />
 </p>
 
-<h1 align="center">ExCom v3.0</h1>
+<h1 align="center">ExCom v3.1</h1>
 
 <p align="center">
-  <strong>Vertical 25-Role Multi-Agent Executive &amp; Aeronautical « Zéro-Oubli » Operating System</strong><br/>
-  Exhaustive Intake · Upfront <strong>Porte 0</strong> Decision Matrix (<code>✅ / ⚠️ / ❌ / 🛑 STOP</code>) · <code>&gt;=80%</code> Root-Cause Autopsy · Sequential Lots &amp; <code>SHA-256</code> Blocking Gates · Cross-Director Contagion Bus.<br/>
+  <strong>Vertical 25-Role Multi-Agent Executive &amp; Aeronautical « Zero-Amnesia » Operating System</strong><br/>
+  Exhaustive Intake · Upfront <strong>Gate 0</strong> Decision Matrix (<code>✅ / ⚠️ / ❌ / 🛑 STOP</code>) · <code>&gt;=80%</code> Root-Cause Autopsy · Dead-End Anti-Loop · Physical <code>PreToolUse</code> Firewall · Lossless Context Anchor · <code>SHA-256</code> Blocking Gates.<br/>
   Built on the open <code>SKILL.md</code> standard — compatible with <strong>Google Antigravity</strong>, <strong>Claude Code</strong>, <strong>OpenAI Codex</strong>, <strong>Cursor</strong>, and <strong>Gemini CLI</strong>.
 </p>
 
 ---
 
-## Why ExCom v3.0?
+## Why ExCom?
 
-AI agents fail on real-world engineering and business projects for four structural reasons:
+AI agents fail on complex engineering, financial, and business projects for five structural reasons:
 1. **Incomplete framing**: guessing missing project contours instead of asking upfront.
-2. **Sycophancy & patchwork**: proposing unmeasured band-aids on broken foundations instead of proving `>= 80%` of the root cause first.
-3. **Second-pass overfitting**: inventing peripheral tweaks on every review pass instead of saying **`🛑 STOP — touch nothing`**.
-4. **Mid-project amnesia**: forgetting requirements between iterations, breaking earlier tests, or letting one workstream's drift silently derail downstream perimeters.
+2. **Sycophancy & patchwork**: proposing unmeasured band-aids on broken foundations instead of proving `>= 80%` of the root cause first—or computing financial numbers via error-prone mental math.
+3. **Second-pass overfitting**: inventing peripheral tweaks on every review pass instead of saying **`🛑 STOP — DO NOT TOUCH`**.
+4. **Cross-session Groundhog Day**: forgetting why an idea failed two weeks ago and proposing the exact same dead-end again.
+5. **Mid-project drift & lossy compaction**: skipping rules after 40 turns, losing exact numbers through recursive "summaries of summaries," or letting one workstream's drift derail downstream perimeters.
 
-**ExCom v3.0** unifies strategic governance and deterministic engineering into **one vertical spine** supporting both **`MODE = "CODE"`** (quant trading, SaaS, AI/ML, embedded, custom software) and **`MODE = "METIER"`** (corporate/tax structuring, real estate, global sourcing, legal, personal wealth/life):
+**ExCom v3.1** locks all five failure modes mechanically across **`MODE = "CODE"`** (quant trading, SaaS, AI/ML, embedded, custom software) and **`MODE = "METIER"`** (corporate/tax structuring, real estate, global sourcing, legal, personal wealth/life)—rendering **US English (`en-US`)** visual chrome while speaking **whatever language the user writes in**.
 
 ---
 
@@ -28,36 +29,37 @@ AI agents fail on real-world engineering and business projects for four structur
 
 ```mermaid
 flowchart TD
-    IN["User Request (New Business/Life Project OR Existing Codebase)"] --> S0{"Contours Complete?"}
+    IN["User Request (Any Language — New Project OR Existing Repo)"] --> ANCHOR["Load Lossless CONTEXT_ANCHOR.md (if ongoing)"]
+    ANCHOR --> S0{"Contours Complete?"}
     S0 -- "Missing Contours" --> Q["Step 0: Exhaustive Contour Intake (Zero Guessing)"]
     Q --> S1
-    S0 -- "Complete" --> S1["Step 1: Silent Factual Probes"]
+    S0 -- "Complete" --> S1["Step 1: Silent Factual Probes & Scripts"]
 
     S1 --> P_CODE["MODE_CODE: root_cause_guard.py scan + >=80% Disk Probe"]
-    S1 --> P_MET["MODE_METIER: Blind Parallel C-Suite + 360° Risk Shield + 3 Wildcards"]
+    S1 --> P_MET["MODE_METIER: Parallel C-Suite + 360° Risk Shield + Dated Sources + Calc Script"]
 
-    P_CODE & P_MET --> P0["PORTE 0 (Upfront Entry): porte0_carte_decideur.py"]
+    P_CODE & P_MET --> P0["GATE 0 (Upfront): porte0_carte_decideur.py + Dead-End Graveyard Check"]
     P0 --> VERDICT{"✅ Critical | ⚠️ Minor | ❌ Blocked | 🛑 STOP"}
-    VERDICT -- "🛑 STOP (<5% residual & 0 brake)" --> HALT["Freeze & Protect Against Overfitting"]
-    VERDICT -- "User Selects ✅/⚠️ Items" --> LOT0["LOT 0: zero_oubli_runner.py init-lot0 + excom_engine.py init"]
+    VERDICT -- "🛑 STOP (<5% residual & 0 brake)" --> HALT["Code/Plan Freeze (Zero Overfitting)"]
+    VERDICT -- "User Selects ✅/⚠️ Items" --> LOT0["LOT 0: init-lot0 + install-hooks (PreToolUse) + PMO Tower"]
 
     LOT0 --> GATES["Sequential Lots 1..K & SHA-256 Blocking Gates P1..PK"]
-    GATES --> CHECK["100% Indelible Tests / Zéro-Faux-Jumeau / Mandatory Clauses + Contagion Audit"]
-    CHECK -- "100% PASS -> Sign tree_sha256" --> LIVE["Browser Cockpit + Google Sheets / Docs Sync"]
+    GATES --> CHECK["Indelible Tests · Zero-Fake-Twin · Mandatory Clauses · Contagion Bus"]
+    CHECK -- "100% PASS -> Sign tree_sha256 & Recompile CONTEXT_ANCHOR.md" --> LIVE["OS Browser Cockpit + Google Sheets / Docs"]
 ```
 
 ---
 
-## The 4 Deterministic Scripts (`skills/excom/scripts/`)
+## The 4 Deterministic Engines (`skills/excom/scripts/`)
 
-Zero external `pip` dependencies (100% Python 3.8+ standard library):
+Zero external `pip` dependencies (`Python 3.8+` standard library):
 
-| Script | Role in the Vertical Spine |
+| Script | Deterministic Guarantees Enforced |
 | :--- | :--- |
-| **`porte0_carte_decideur.py`** | **Upfront Entry Gate (`Porte 0`)**: grades every strategic option or code fix across 4 universal thermometers (`C1` Verified Evidence, `C2` Foundations/Brakes First, `C3` Zero Bloat/Magic Params, `C4` `>= 5%` Materiality) and fires **`🛑 STOP`** when further edits would cause overfitting. |
-| **`root_cause_guard.py`** | **Read-Only AST, Open-Domain & Drift Scanner**: auto-detects project archetypes (or locks bespoke domain physics via `register-domain`), tracks `NON_CODE_METIER` document hashes, enforces a **One-Way Complexity Ratchet**, and audits `git diff` post-edit. |
-| **`zero_oubli_runner.py`** | **Aeronautical Lot & `SHA-256` Gate Runner**: registers approved items at `Lot 0`, verifies AST *Zéro-Faux-Jumeau* production calls, locks an **Indelible Cumulative Test Suite**, checks mandatory clauses on `METIER` deliverables, and blocks `Lot k+1` until `Gate Pk` holds a valid `tree_sha256` certificate. |
-| **`excom_engine.py`** | **PMO Control Tower & Cross-Perimeter Contagion Bus**: computes CPM/PERT Critical Path (`P85`), Earned Value (`BAC, CPI, SPI, EAC`), propagates upstream slips/cost/vendor signals across all 25 roles, and renders `dashboard.html` + CSVs. |
+| **`porte0_carte_decideur.py`** | **Gate 0 Upfront Matrix**: 4 universal thermometers (`C1` Verified Proof & Zero Mental Math, `C2` Foundations First, `C3` Zero Bloat & **Dead-End Graveyard Anti-Loop** + `N_trials`, `C4` `>= 5%` Materiality) + **`🛑 STOP`** verdict. |
+| **`root_cause_guard.py`** | **Read-Only AST, Open-Domain & Drift Scanner**: auto-detects archetypes (or locks bespoke domain physics via `register-domain`), tracks `NON_CODE_METIER` document hashes, enforces a **One-Way Complexity Ratchet**, and audits `git diff` post-edit. |
+| **`zero_oubli_runner.py`** | **Aeronautical Runner, Physical Firewall & Lossless Anchor**: `Lot 0` ledger, **`install-hooks`** (`PreToolUse` physical block on uncertified edits, sacred files & test deletions), AST *Zero-Fake-Twin* check, `tree_sha256` gate certificates, and **`render-anchor`** (compiles `CONTEXT_ANCHOR.md` straight from primary JSONs—zero lossy LLM summarization across 50+ iterations). |
+| **`excom_engine.py`** | **PMO Control Tower & Cross-Perimeter Contagion Bus**: CPM/PERT Critical Path (`P85`), Earned Value (`BAC, CPI, SPI, EAC`), transitive root-cause slip & cost alerts across all 25 roles, US-English `dashboard.html` & CSV exports. |
 
 ---
 
@@ -65,7 +67,7 @@ Zero external `pip` dependencies (100% Python 3.8+ standard library):
 
 - **Tier 1 — Governance & Wildcards**: **`CEO`** (direct interlocutor), **`DEVIL`** (*Pre-Mortem & Root-Cause Gatekeeper*), **`OUTSIDER`** (*First-Principles & Via Negativa*), **`OPTIMIST`** (*10x Asymmetric Leverage*).
 - **Tier 2 — 20 C-Suite Directors (Dual Corporate ↔ Personal Lenses + SOTA 2026 Toolkits)**: `COO`, `CFO`, `CTO`, `CIO`, `CISO`, `CDO-Data`, `CAIO`, `CDO-Digital`, `CMO`, `CRO-Revenue`, `CCO-Commercial`, `CCO-Customer`, `CXO`, `CPO`, `CSO-Strategy`, `CHRO`, `CLO`, `CCO-Compliance`, `CRO-Risk`, `CSO-Sustainability`.
-- **Tier 3 — Execution Control**: **`PMO`** (CPM/EVM Control Tower + Aeronautical `Zéro-Oubli` Gatekeeper).
+- **Tier 3 — Execution Control**: **`PMO`** (CPM/EVM Control Tower + Aeronautical `SHA-256` Gatekeeper).
 
 ---
 
