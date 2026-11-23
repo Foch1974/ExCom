@@ -1,12 +1,12 @@
 {
   "name": "excom",
   "displayName": "ExCom",
-  "version": "2.0.0",
-  "description": "25-role Multi-Agent Executive Committee & 360° Project Operating System: blind parallel C-Suite + Risk Shield deliberation, CPM/EVM HTML Control Tower, SOTA Director execution toolkits, and Cross-Perimeter Contagion Bus.",
+  "version": "3.0.0",
+  "description": "Vertical 25-Role Executive & Aeronautical Engineering OS: Exhaustive Intake, Upfront Porte 0 Decision Matrix (✅/⚠️/❌/🛑 STOP), >=80% Root-Cause Autopsy, Zéro-Oubli Lots & SHA-256 Gates, CPM/EVM Control Tower, and Cross-Director Contagion Bus.",
   "logo": "assets/logo.svg",
   "suggestedPrompts": [
-    "Convene the ExCom to evaluate launching a B2B AI SaaS vs high-ticket advisory first",
-    "Run an ExCom session on structuring an algorithmic trading vehicle or major personal investment",
-    "Launch the PMO Control Tower and SOTA Director workstreams (CLO, CFO, CPO sourcing) on our approved decision"
+    "Frame a new business or personal investment project with ExCom and show me the Porte 0 Decision Matrix",
+    "Run a Root-Cause 80% autopsy and Porte 0 audit on an underperforming strategy or codebase",
+    "Execute our approved Porte 0 items under the Aeronautical Zéro-Oubli Lot & SHA-256 Gate protocol"
   ]
 }

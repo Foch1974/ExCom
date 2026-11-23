@@ -30,9 +30,10 @@ python <skill-root>/scripts/excom_engine.py init --project-dir <project-dir> --s
 
 ## Step 2 — Deliver the 5-Block Executive Charter + Live Interactive Surfaces
 
-Never leave deliverables trapped in unclickable temporary/scratch paths:
-1. **Native Interactive Artifact (Antigravity / IDE Hosts)**: When running in Google Antigravity, write or mirror the visual HTML cockpit directly into the conversation's **Artifact Directory** using the native `write_file` tool with `ArtifactMetadata` (`UserFacing: true`, `RequestFeedback: false`, using the allowlisted Tailwind script if styled inline) so it opens in one click in the Artifacts side pane.
-2. **Cloud Workspace Sync (Google Sheets & Google Docs, when installed)**: When the host environment has `gsheets` and/or `gdocs` connected, mirror the 3 operational tables (`1_Gantt_CPM`, `2_Budget_EVM`, `3_Alertes_Contagion`) into a formatted **Google Sheet** and/or sync executive charters and legal drafts into a **Google Doc**, surfacing their direct `https://docs.google.com/...` URLs.
+Never leave deliverables behind dead `file:///.../*.html` chat links (which open raw HTML code in editor sidebars instead of rendering the dashboard):
+1. **Real Browser Launch (Local Cockpit)**: Launch `dashboard.html` directly in the user's system browser via command (`Start-Process "<path>/dashboard.html"` on Windows, `open` on macOS, `xdg-open` on Linux) — or render a compact `< 450px` summary widget inline via `<agent-embed>` if requested.
+2. **Cloud Workspace Sync (Google Sheets & Google Docs, when installed)**: When `gsheets` and/or `gdocs` are connected, mirror the 3 operational tables (`1_Gantt_CPM`, `2_Budget_EVM`, `3_Alertes_Contagion`) into a formatted **Google Sheet** and sync executive charters/statutes into a **Google Doc**, surfacing their direct `https://docs.google.com/...` URLs.
+3. **Aeronautical Zéro-Oubli Lock (`Lot 0`)**: Register all approved deliverables and technical tasks into [scripts/zero_oubli_runner.py](../scripts/zero_oubli_runner.py) (`init-lot0`) so every Milestone `M1..Mk` is guarded by a `SHA-256` Gate `P1..Pk`.
 
 Present the concise executive summary in the user's language alongside those live links:
 
