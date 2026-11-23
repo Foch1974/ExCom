@@ -74,7 +74,7 @@ Zero external `pip` dependencies (`Python 3.8+` standard library):
 ## Installation
 
 ```bash
-npx skills add <your-github-username>/ExCom
+npx skills add Foch1974/ExCom
 ```
 
 Compatible with **Google Antigravity**, **Claude Code** (`/plugin marketplace add`), **OpenAI Codex**, **Cursor**, and **Gemini CLI**.
