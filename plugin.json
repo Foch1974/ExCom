@@ -1,8 +1,8 @@
 {
   "name": "excom",
   "displayName": "ExCom",
-  "version": "3.1.0",
-  "description": "Vertical 25-Role Executive & Aeronautical Engineering OS: Upfront Gate 0 Decision Matrix (✅/⚠️/❌/🛑 STOP), >=80% Root-Cause Autopsy, Dead-End Anti-Loop, Physical PreToolUse Hooks, Lossless Context Anchor, SHA-256 Gates & CPM/EVM Control Tower.",
+  "version": "3.2.0",
+  "description": "Vertical 25-Role Executive & Aeronautical Engineering OS (v3.2): Plateau Clean-Room Circuit Breaker, 3-State Foundation Ceiling, Anti-Self-Certification Gate 0 Evidence Bindings, Falsifiable Dead-Ends, AST Blind-Spot & Schema-Parity Scan, Physical PreToolUse Hooks, Lossless Anchor, SHA-256 Gates & CPM/EVM Control Tower.",
   "logo": "assets/logo.svg",
   "homepage": "https://github.com/Foch1974/ExCom",
   "repository": "https://github.com/Foch1974/ExCom",

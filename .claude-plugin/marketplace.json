@@ -7,8 +7,8 @@
     {
       "name": "excom",
       "source": "./",
-      "description": "Vertical 25-Role Executive & Aeronautical Engineering OS (Gate 0 Decision Matrix + >=80% Root-Cause Autopsy + Dead-End Anti-Loop + PreToolUse Hooks + SHA-256 Gates).",
-      "version": "3.1.0"
+      "description": "Vertical 25-Role Executive & Aeronautical Engineering OS (v3.2: Clean-Room Circuit Breaker + 3-State Ceiling + Anti-Self-Certification Gate 0 + Falsifiable Dead-Ends + AST Schema Parity + PreToolUse Hooks + SHA-256 Gates).",
+      "version": "3.2.0"
     }
   ]
 }
