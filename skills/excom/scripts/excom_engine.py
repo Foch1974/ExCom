@@ -1,18 +1,25 @@
 #!/usr/bin/env python3
-"""ExCom v2.0 — Project Control Tower & Cross-Perimeter Contagion Engine.
+"""ExCom v3.3 — 360° Enterprise Q-C-D-R Control Tower, Contagion Bus & Interchange Engine.
 
-Zero-dependency Python 3.8+ standard-library CLI engine for:
-  1. Initializing persistent project workspaces (`project-state.json` + `events-bus.jsonl`)
-  2. Computing CPM (Critical Path Method) + PERT 3-point schedules & float/slack erosion
-  3. Computing Earned Value Management (EVM: BAC, PV, EV, AC, CPI, SPI, EAC, VAC)
-  4. Propagating Cross-Perimeter Contagion & Upstream Early-Warning Alerts across all 25 ExCom seats
-  5. Rendering a self-contained interactive HTML Executive Cockpit (`dashboard.html`) + CSV exports
+100% Python 3.8+ standard library (zero external pip dependencies).
+Universal across ALL project types (Real Estate/Construction, IT/ERP, Industrial, M&A, Quant, Personal):
+  1. Schedule (Délais): CPM + PERT P85, FS/SS/FF/SF dependencies with lag, Hard Target Deadline &
+     Negative Float (backward planning), Near-Critical Path (<= 5d float), and transitive slip contagion.
+  2. Cost (Coûts): 5-Column Enterprise Budget (Initial BAC -> Approved TMA/Changes -> Revised Budget ->
+     Committed -> Actual AC -> Remaining ETC -> Forecast EAC -> Variance VAC), Contingency vs Management
+     Reserve separation, multi-year TCO (incl. OPEX, indexation, incentives, exit/dilapidation), & S-Curve.
+  3. Risks & Contracts (Risques & Contractuel): Quantified Risk Register (EMV Cost + Expected Delay vs
+     remaining contingency) + Contractual Negotiation & Suspensive Conditions Tracker (incl. HSE clauses).
+  4. Quality & HSE / Compliance Gate (Qualité & Conformité): Asset/Regulatory Testing, Punch-List Reserves,
+     Remediation Cost/Delay Contagion, and Hard Go-Live Blocker until 100% certificates are issued.
+  5. Governance & Interchange: Adaptive Methodology Selector, RACI Matrix, Decision Log, 1-click CoPil
+     Brief, Multi-View HTML Cockpit, MS Project XML (MSPDI), Native 7-Tab Excel (.xlsx), UTF-8-BOM CSVs
+     (incl. Jira/Asana/Monday), iCalendar (.ics), and Bidirectional CSV / MS Project XML Import.
 """
 
 from __future__ import annotations
 
 import argparse
-import csv
 import datetime as dt
 import html
 import json
@@ -22,21 +29,38 @@ import sys
 import uuid
 from typing import Any, Dict, List, Optional, Tuple
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
 
-SCHEMA_VERSION = "2.0.0"
+from excom_interop import (
+    _parse_dep_spec,
+    export_copil_brief,
+    export_enterprise_csvs,
+    export_excel_xlsx,
+    export_icalendar_ics,
+    export_msproject_xml,
+    import_msproject_xml,
+    import_tasks_csv,
+    select_methodology,
+)
+
+
+SCHEMA_VERSION = "3.3.0"
 
 DEFAULT_DOMAIN_COUPLINGS: Dict[str, List[str]] = {
     "COST": ["CFO", "CRO-Risk", "PMO"],
     "SCHEDULE": ["PMO", "COO", "CHRO"],
     "LEGAL": ["CLO", "CCO-Compliance", "CRO-Risk"],
-    "COMPLIANCE": ["CCO-Compliance", "CLO", "CISO"],
+    "COMPLIANCE": ["CCO-Compliance", "CLO", "CISO", "COO", "PMO"],
+    "HSE": ["CCO-Compliance", "COO", "CLO", "CFO", "PMO"],
     "VENDOR": ["COO", "CPO", "CLO", "CISO", "CFO"],
     "TECH": ["CTO", "CIO", "CISO", "CAIO", "CFO"],
     "DATA_AI": ["CDO-Data", "CAIO", "CISO", "CCO-Compliance"],
     "MARKET": ["CMO", "CRO-Revenue", "CCO-Commercial", "CPO", "COO"],
     "HUMAN": ["CHRO", "COO", "CXO"],
     "RISK": ["CRO-Risk", "CFO", "CLO", "PMO"],
-    "ESG": ["CSO-Sustainability", "CCO-Compliance", "COO"],
+    "ESG": ["CSO-Sustainability", "CCO-Compliance", "COO", "CFO"],
 }
 
 
@@ -45,7 +69,7 @@ def now_iso() -> str:
 
 
 def parse_date(s: str) -> dt.date:
-    return dt.date.fromisoformat(s[:10])
+    return dt.date.fromisoformat(str(s)[:10])
 
 
 def read_json(path: Path) -> Dict[str, Any]:
@@ -90,10 +114,11 @@ def topological_sort(tasks: List[Dict[str, Any]]) -> List[str]:
     succ: Dict[str, List[str]] = {t["id"]: [] for t in tasks}
 
     for t in tasks:
-        for dep in t.get("depends_on", []):
-            if dep in by_id:
+        for raw_dep in t.get("depends_on", []):
+            dep_id, _, _ = _parse_dep_spec(raw_dep)
+            if dep_id in by_id:
                 in_deg[t["id"]] += 1
-                succ[dep].append(t["id"])
+                succ[dep_id].append(t["id"])
 
     queue = [tid for tid, d in in_deg.items() if d == 0]
     order: List[str] = []
@@ -111,14 +136,70 @@ def topological_sort(tasks: List[Dict[str, Any]]) -> List[str]:
     return order
 
 
+def _forward_es_from_dep(dep_es: float, dep_ef: float, own_dur: float, dep_type: str, lag: float) -> float:
+    if dep_type == "SS":
+        return max(0.0, dep_es + lag)
+    if dep_type == "FF":
+        return max(0.0, dep_ef + lag - own_dur)
+    if dep_type == "SF":
+        return max(0.0, dep_es + lag - own_dur)
+    # Default: FS
+    return max(0.0, dep_ef + lag)
+
+
+def _backward_lf_from_succ(succ_ls: float, succ_lf: float, own_dur: float, dep_type: str, lag: float) -> float:
+    if dep_type == "SS":
+        return succ_ls - lag + own_dur
+    if dep_type == "FF":
+        return succ_lf - lag
+    if dep_type == "SF":
+        return succ_lf - lag + own_dur
+    # Default: FS
+    return succ_ls - lag
+
+
 def compute_schedule_and_evm(state: Dict[str, Any], as_of_str: Optional[str] = None) -> Dict[str, Any]:
     start_dt = parse_date(state.get("start_date", dt.date.today().isoformat()))
     as_of = parse_date(as_of_str) if as_of_str else parse_date(state.get("as_of_date", start_dt.isoformat()))
+    target_end_str = str(state.get("target_end_date", "") or "").strip()
+    target_end_dt = parse_date(target_end_str) if target_end_str else None
+    target_horizon_days = float((target_end_dt - start_dt).days) if target_end_dt else None
+
     tasks = state.get("tasks", [])
     by_id = {t["id"]: t for t in tasks}
     order = topological_sort(tasks)
 
-    # 1. Baseline schedule pass (without forecast overrides)
+    # Pre-aggregate approved Change Orders (TMA) per task
+    change_orders = state.get("change_orders", [])
+    approved_co_cost_by_task: Dict[str, float] = {}
+    approved_co_delay_by_task: Dict[str, float] = {}
+    unassigned_approved_co_cost = 0.0
+    approved_co_total = 0.0
+    for co in change_orders:
+        if str(co.get("status", "")).strip().upper() == "APPROVED":
+            c_imp = float(co.get("cost_impact_eur", 0.0))
+            d_imp = float(co.get("delay_impact_days", 0.0))
+            approved_co_total += c_imp
+            ltid = str(co.get("linked_task_id", "")).strip()
+            if ltid and ltid in by_id:
+                approved_co_cost_by_task[ltid] = approved_co_cost_by_task.get(ltid, 0.0) + c_imp
+                approved_co_delay_by_task[ltid] = approved_co_delay_by_task.get(ltid, 0.0) + d_imp
+            else:
+                unassigned_approved_co_cost += c_imp
+
+    # Parse dependency graph with FS/SS/FF/SF + lag
+    deps_parsed: Dict[str, List[Tuple[str, str, float]]] = {}
+    succ_edges: Dict[str, List[Tuple[str, str, float]]] = {tid: [] for tid in order}
+    for tid in order:
+        plist: List[Tuple[str, str, float]] = []
+        for raw_dep in by_id[tid].get("depends_on", []):
+            dep_id, dep_type, lag_d = _parse_dep_spec(raw_dep)
+            if dep_id in by_id:
+                plist.append((dep_id, dep_type, lag_d))
+                succ_edges[dep_id].append((tid, dep_type, lag_d))
+        deps_parsed[tid] = plist
+
+    # 1. Baseline schedule pass
     base_es: Dict[str, float] = {}
     base_ef: Dict[str, float] = {}
     base_dur_map: Dict[str, float] = {}
@@ -126,63 +207,84 @@ def compute_schedule_and_evm(state: Dict[str, Any], as_of_str: Optional[str] = N
         t = by_id[tid]
         b_dur, _ = pert_duration(t, use_forecast=False)
         base_dur_map[tid] = b_dur
-        deps = [d for d in t.get("depends_on", []) if d in by_id]
-        es = max((base_ef[d] for d in deps), default=0.0)
+        es = max(
+            (_forward_es_from_dep(base_es[d], base_ef[d], b_dur, dt_t, lg) for d, dt_t, lg in deps_parsed[tid]),
+            default=0.0,
+        )
         base_es[tid] = round(es, 1)
         base_ef[tid] = round(es + b_dur, 1)
 
     baseline_project_days = round(max(base_ef.values(), default=0.0), 1)
 
-    # 2. Live / Forecast CPM forward pass
+    # 2. Live / Forecast CPM forward pass (includes explicit forecast_days + approved CO delay if not already baked in)
     es_map: Dict[str, float] = {}
     ef_map: Dict[str, float] = {}
     dur_map: Dict[str, float] = {}
     sigma_map: Dict[str, float] = {}
-    succ_map: Dict[str, List[str]] = {tid: [] for tid in order}
-
     for tid in order:
         t = by_id[tid]
         dur, sig = pert_duration(t, use_forecast=True)
+        if t.get("forecast_days") is None and approved_co_delay_by_task.get(tid, 0.0) > 0:
+            dur = round(dur + approved_co_delay_by_task[tid], 1)
         dur_map[tid] = dur
         sigma_map[tid] = sig
-        deps = [d for d in t.get("depends_on", []) if d in by_id]
-        for d in deps:
-            succ_map[d].append(tid)
-        es = max((ef_map[d] for d in deps), default=0.0)
+        es = max(
+            (_forward_es_from_dep(es_map[d], ef_map[d], dur, dt_t, lg) for d, dt_t, lg in deps_parsed[tid]),
+            default=0.0,
+        )
         es_map[tid] = round(es, 1)
         ef_map[tid] = round(es + dur, 1)
 
     live_project_days = round(max(ef_map.values(), default=0.0), 1)
 
-    # 3. Backward pass for LF, LS, Total Float & Critical Path
+    # 3. Backward pass: standard CPM float vs Live Finish, AND Hard-Target Backward Slack (Negative Float!)
     lf_map: Dict[str, float] = {}
     ls_map: Dict[str, float] = {}
     float_map: Dict[str, float] = {}
+    t_lf_map: Dict[str, float] = {}
+    t_ls_map: Dict[str, float] = {}
+    target_slack_map: Dict[str, float] = {}
+
+    hard_end_ref = target_horizon_days if target_horizon_days is not None else live_project_days
 
     for tid in reversed(order):
-        succs = succ_map[tid]
-        lf = min((ls_map[s] for s in succs), default=live_project_days)
+        s_list = succ_edges[tid]
+        lf = min((_backward_lf_from_succ(ls_map[s], lf_map[s], dur_map[tid], dt_t, lg) for s, dt_t, lg in s_list), default=live_project_days)
         ls = lf - dur_map[tid]
         lf_map[tid] = round(lf, 1)
         ls_map[tid] = round(ls, 1)
         float_map[tid] = round(max(0.0, lf - ef_map[tid]), 1)
 
+        tlf = min((_backward_lf_from_succ(t_ls_map[s], t_lf_map[s], dur_map[tid], dt_t, lg) for s, dt_t, lg in s_list), default=hard_end_ref)
+        tls = tlf - dur_map[tid]
+        t_lf_map[tid] = round(tlf, 1)
+        t_ls_map[tid] = round(tls, 1)
+        target_slack_map[tid] = round(tlf - ef_map[tid], 1)
+
     critical_path: List[str] = []
+    near_critical_tasks: List[str] = []
     crit_sigma_sq = 0.0
 
-    # Enrich tasks & compute EVM
+    # 4. Enrich tasks + 5-Column Budget & EVM Rollup + Monthly Cash-Flow S-Curve
     bac = 0.0
+    revised_budget_total = unassigned_approved_co_cost
     pv = 0.0
     ev = 0.0
     ac = 0.0
     committed_total = 0.0
+    etc_total = 0.0
+    task_eac_sum = unassigned_approved_co_cost
+    monthly_cashflow: Dict[str, float] = {}
 
     for tid in order:
         t = by_id[tid]
         is_crit = float_map[tid] <= 0.05 and dur_map[tid] > 0
+        is_near_crit = (not is_crit) and (0.05 < float_map[tid] <= 5.0) and dur_map[tid] > 0
         if is_crit:
             critical_path.append(tid)
             crit_sigma_sq += sigma_map[tid] ** 2
+        elif is_near_crit:
+            near_critical_tasks.append(tid)
 
         p_start = start_dt + dt.timedelta(days=int(round(base_es[tid])))
         p_end = start_dt + dt.timedelta(days=int(round(base_ef[tid])))
@@ -198,10 +300,17 @@ def compute_schedule_and_evm(state: Dict[str, Any], as_of_str: Optional[str] = N
             t["progress_pct"] = 100.0
 
         planned_cost = float(t.get("planned_budget", 0.0))
+        co_cost = round(approved_co_cost_by_task.get(tid, 0.0), 2)
+        revised_b = round(planned_cost + co_cost, 2)
         actual_cost = float(t.get("actual_cost", 0.0))
         committed_cost = max(actual_cost, float(t.get("committed_cost", actual_cost)))
+        if t.get("etc_cost") is not None:
+            task_etc = max(0.0, float(t["etc_cost"]))
+        else:
+            task_etc = round(max(0.0, max(revised_b, committed_cost) - actual_cost), 2)
+        task_eac = round(actual_cost + task_etc, 2)
+        task_vac = round(revised_b - task_eac, 2)
 
-        # Planned value pro-rata as of `as_of`
         if as_of >= p_end:
             pv_ratio = 1.0
         elif as_of <= p_start:
@@ -211,10 +320,18 @@ def compute_schedule_and_evm(state: Dict[str, Any], as_of_str: Optional[str] = N
             pv_ratio = min(1.0, max(0.0, (as_of - p_start).days / span))
 
         bac += planned_cost
-        pv += planned_cost * pv_ratio
-        ev += planned_cost * (progress / 100.0)
+        revised_budget_total += revised_b
+        pv += revised_b * pv_ratio
+        ev += revised_b * (progress / 100.0)
         ac += actual_cost
         committed_total += committed_cost
+        etc_total += task_etc
+        task_eac_sum += task_eac
+
+        # Monthly Cash-Flow S-Curve allocation across forecast duration
+        if task_eac > 0:
+            ym_key = f_end.strftime("%Y-%m")
+            monthly_cashflow[ym_key] = round(monthly_cashflow.get(ym_key, 0.0) + task_eac, 2)
 
         is_overdue = (as_of > f_end) and (progress < 100.0)
 
@@ -228,7 +345,9 @@ def compute_schedule_and_evm(state: Dict[str, Any], as_of_str: Optional[str] = N
             "duration_days": dur_map[tid],
             "sigma_days": sigma_map[tid],
             "total_float_days": float_map[tid],
+            "target_slack_days": target_slack_map[tid],
             "is_critical": is_crit,
+            "is_near_critical": is_near_crit,
             "planned_start": p_start.isoformat(),
             "planned_end": p_end.isoformat(),
             "forecast_start": f_start.isoformat(),
@@ -237,30 +356,70 @@ def compute_schedule_and_evm(state: Dict[str, Any], as_of_str: Optional[str] = N
             "own_slip_days": own_slip_days,
             "inherited_delay_days": inherited_delay_days,
             "is_overdue": is_overdue,
+            "approved_changes_eur": co_cost,
+            "revised_budget": revised_b,
             "committed_cost": round(committed_cost, 2),
-            "cost_variance": round((planned_cost * (progress / 100.0)) - actual_cost, 2) if ac > 0 else 0.0,
-            "budget_overrun_eur": round(max(0.0, committed_cost - planned_cost), 2),
+            "etc_eur": round(task_etc, 2),
+            "task_eac_eur": task_eac,
+            "task_vac_eur": task_vac,
+            "cost_variance": round((revised_b * (progress / 100.0)) - actual_cost, 2) if ac > 0 else 0.0,
+            "budget_overrun_eur": round(max(0.0, task_eac - revised_b), 2),
         }
 
-    # Include recurring/overhead budget lines in global budget rollup
+    # 5. Global 5-Column EVM, Contingency vs Management Reserve, & Multi-Year TCO
     recurring_annual = sum(float(r.get("annual_eur", 0.0)) for r in state.get("recurring_opex", []))
-    contingency_pct = float(state.get("contingency_pct", 15.0))
+    contingency_pct = float(state.get("contingency_pct", 12.0))
+    mgmt_reserve_pct = float(state.get("management_reserve_pct", 5.0))
     contingency_eur = round(bac * (contingency_pct / 100.0), 2)
+    mgmt_reserve_eur = round(bac * (mgmt_reserve_pct / 100.0), 2)
+    contingency_remaining = round(contingency_eur - approved_co_total, 2)
 
     cpi = round(ev / ac, 2) if ac > 0 else 1.0
     spi = round(ev / pv, 2) if pv > 0 else 1.0
-    if ac > 0 and ev > 0:
-        eac = round(bac / cpi, 2)
-    else:
-        eac = round(max(bac, committed_total), 2)
-    vac = round(bac - eac, 2)
-    denom_tcpi = bac - ac
-    tcpi = round((bac - ev) / denom_tcpi, 2) if denom_tcpi > 0 else 1.0
+    eac = round(max(task_eac_sum, (revised_budget_total / cpi) if (ac > 0 and ev > 0 and cpi < 1.0) else task_eac_sum), 2)
+    vac = round(revised_budget_total - eac, 2)
+    denom_tcpi = revised_budget_total - ac
+    tcpi = round((revised_budget_total - ev) / denom_tcpi, 2) if denom_tcpi > 0 else 1.0
+
+    # Multi-Year TCO (CAPEX EAC + Indexed OPEX + Exit/Dilapidations - Landlord/Grant Incentives)
+    tco_years = int(state.get("tco_horizon_years", 6))
+    idx_rate = float(state.get("indexation_annual_pct", 2.0)) / 100.0
+    opex_tco = sum(recurring_annual * ((1.0 + idx_rate) ** yr) for yr in range(tco_years))
+    exit_dilap = float(state.get("exit_dilapidation_eur", 0.0))
+    incentives = float(state.get("incentives_ti_allowance_eur", 0.0))
+    tco_total = round(eac + opex_tco + exit_dilap - incentives, 2)
+
+    # 6. Q-C-D-R Enterprise Register Rollups (Risks EMV, HSE/Compliance Go-Live Gate, Contracts)
+    open_risks = [r for r in state.get("risk_register", []) if str(r.get("status", "OPEN")).upper() == "OPEN"]
+    risk_emv_eur = round(sum(float(r.get("probability_pct", 0.0)) / 100.0 * float(r.get("cost_impact_eur", 0.0)) for r in open_risks), 2)
+    risk_exp_delay = round(sum(float(r.get("probability_pct", 0.0)) / 100.0 * float(r.get("delay_impact_days", 0.0)) for r in open_risks), 1)
+    crit_risks = sum(1 for r in open_risks if float(r.get("probability_pct", 0.0)) >= 40.0 and (float(r.get("cost_impact_eur", 0.0)) >= 10000 or float(r.get("delay_impact_days", 0.0)) >= 10))
+
+    comp_items = state.get("compliance_register", [])
+    comp_total = len(comp_items)
+    certs_issued = sum(1 for c in comp_items if bool(c.get("certificate_issued", False)))
+    blocking_comp_open = sum(
+        1 for c in comp_items
+        if bool(c.get("blocking_go_live", True))
+        and (not bool(c.get("certificate_issued", False)) or (bool(str(c.get("reserves", "")).strip()) and not bool(c.get("reserves_lifted", False))))
+    )
+    open_reserves = sum(1 for c in comp_items if bool(str(c.get("reserves", "")).strip()) and not bool(c.get("reserves_lifted", False)))
+    comp_remed_cost = round(sum(float(c.get("remediation_cost_eur", 0.0)) for c in comp_items if not bool(c.get("reserves_lifted", False)) and not bool(c.get("certificate_issued", False))), 2)
+    comp_remed_delay = round(sum(float(c.get("remediation_delay_days", 0.0)) for c in comp_items if not bool(c.get("reserves_lifted", False)) and not bool(c.get("certificate_issued", False))), 1)
+    go_live_status = "BLOCKED_BY_COMPLIANCE" if blocking_comp_open > 0 else "READY"
+
+    contracts = state.get("contracts_register", [])
+    ct_signed = sum(1 for ct in contracts if str(ct.get("status", "")).upper() == "SIGNED")
+    ct_open_red = sum(1 for ct in contracts if str(ct.get("status", "")).upper() in ("NEGOTIATING", "DISPUTED", "REDLINE", "BLOCKED"))
+    open_suspensive = sum(1 for ct in contracts if bool(ct.get("is_suspensive_condition", False)) and str(ct.get("status", "")).upper() not in ("LIFTED", "SATISFIED", "SIGNED"))
+    ct_exposure = round(sum(float(ct.get("financial_exposure_eur", 0.0)) for ct in contracts if str(ct.get("status", "")).upper() != "SIGNED"), 2)
 
     p85_buffer_days = round(1.04 * math.sqrt(crit_sigma_sq), 1)
     project_slip_days = round(live_project_days - baseline_project_days, 1)
+    forecast_end_dt = start_dt + dt.timedelta(days=int(round(live_project_days)))
+    target_margin_days = round(target_horizon_days - live_project_days, 1) if target_horizon_days is not None else None
 
-    overall_pct = round((ev / bac) * 100.0, 1) if bac > 0 else round(
+    overall_pct = round((ev / revised_budget_total) * 100.0, 1) if revised_budget_total > 0 else round(
         sum(float(t.get("progress_pct", 0.0)) for t in tasks) / max(1, len(tasks)), 1
     )
 
@@ -271,35 +430,69 @@ def compute_schedule_and_evm(state: Dict[str, Any], as_of_str: Optional[str] = N
         "p85_duration_days": round(live_project_days + p85_buffer_days, 1),
         "project_slip_days": project_slip_days,
         "baseline_end_date": (start_dt + dt.timedelta(days=int(round(baseline_project_days)))).isoformat(),
-        "forecast_end_date": (start_dt + dt.timedelta(days=int(round(live_project_days)))).isoformat(),
+        "forecast_end_date": forecast_end_dt.isoformat(),
+        "target_end_date": target_end_str or None,
+        "target_margin_days": target_margin_days,
         "critical_path": critical_path,
+        "near_critical_tasks": near_critical_tasks,
         "overall_progress_pct": overall_pct,
+        "monthly_cashflow_s_curve": dict(sorted(monthly_cashflow.items())),
         "evm": {
             "bac_eur": round(bac, 2),
+            "approved_changes_eur": round(approved_co_total, 2),
+            "revised_budget_eur": round(revised_budget_total, 2),
             "contingency_eur": contingency_eur,
-            "total_envelope_eur": round(bac + contingency_eur, 2),
+            "contingency_remaining_eur": contingency_remaining,
+            "management_reserve_eur": mgmt_reserve_eur,
+            "total_envelope_eur": round(bac + contingency_eur + mgmt_reserve_eur, 2),
             "committed_eur": round(committed_total, 2),
             "pv_eur": round(pv, 2),
             "ev_eur": round(ev, 2),
             "ac_eur": round(ac, 2),
+            "etc_eur": round(etc_total, 2),
             "cpi": cpi,
             "spi": spi,
             "eac_eur": eac,
             "vac_eur": vac,
             "tcpi": tcpi,
             "recurring_annual_opex_eur": round(recurring_annual, 2),
+            "tco_horizon_years": tco_years,
+            "tco_total_eur": tco_total,
+        },
+        "qcdr": {
+            "risk_emv_eur": risk_emv_eur,
+            "risk_expected_delay_days": risk_exp_delay,
+            "open_risks_count": len(open_risks),
+            "critical_risks_count": crit_risks,
+            "compliance_total": comp_total,
+            "certificates_issued": certs_issued,
+            "certificates_pct": round((certs_issued / comp_total) * 100.0, 1) if comp_total > 0 else 100.0,
+            "blocking_compliance_open": blocking_comp_open,
+            "open_reserves_count": open_reserves,
+            "compliance_remediation_cost_eur": comp_remed_cost,
+            "compliance_remediation_delay_days": comp_remed_delay,
+            "go_live_gate_status": go_live_status,
+            "contracts_signed_count": ct_signed,
+            "contracts_open_redlines": ct_open_red,
+            "open_suspensive_conditions": open_suspensive,
+            "contracts_open_exposure_eur": ct_exposure,
         },
     }
     return state
 
 
 def run_contagion_radar(state: Dict[str, Any], project_dir: Optional[Path] = None) -> List[Dict[str, Any]]:
-    """Detects upstream schedule/cost/scope drifts and populates cross-director alerts."""
+    """Detects upstream schedule, hard-deadline, cost, EMV risk, HSE/compliance, and contractual drifts."""
     existing_alerts: List[Dict[str, Any]] = state.setdefault("alerts", [])
     existing_fps = {a.get("fingerprint") for a in existing_alerts if a.get("status") == "OPEN"}
 
     tasks = state.get("tasks", [])
     by_id = {t["id"]: t for t in tasks}
+    m = state.get("metrics", {})
+    evm = m.get("evm", {})
+    qcdr = m.get("qcdr", {})
+    as_of = parse_date(m.get("as_of_date", dt.date.today().isoformat()))
+    ccy = state.get("currency", "EUR")
     new_alerts: List[Dict[str, Any]] = []
 
     def register_alert(
@@ -334,24 +527,22 @@ def run_contagion_radar(state: Dict[str, Any], project_dir: Optional[Path] = Non
         existing_fps.add(fingerprint)
         new_alerts.append(alert)
         if project_dir is not None:
-            append_event(
-                project_dir,
-                {
-                    "type": "CONTAGION_ALERT_RAISED",
-                    "alert_id": alert["id"],
-                    "severity": severity,
-                    "source_seat": source_seat,
-                    "target_seats": clean_targets,
-                    "title": title,
-                },
-            )
+            append_event(project_dir, {
+                "type": "CONTAGION_ALERT_RAISED",
+                "alert_id": alert["id"],
+                "severity": severity,
+                "source_seat": source_seat,
+                "target_seats": clean_targets,
+                "title": title,
+            })
 
-    # Build transitive downstream map for root-cause contagion attribution
+    # Build transitive downstream map
     adj: Dict[str, List[str]] = {t["id"]: [] for t in tasks}
     for t in tasks:
-        for dep in t.get("depends_on", []):
-            if dep in adj:
-                adj[dep].append(t["id"])
+        for raw_dep in t.get("depends_on", []):
+            dep_id, _, _ = _parse_dep_spec(raw_dep)
+            if dep_id in adj:
+                adj[dep_id].append(t["id"])
 
     def transitive_downstream(start_tid: str) -> List[str]:
         seen: List[str] = []
@@ -363,24 +554,36 @@ def run_contagion_radar(state: Dict[str, Any], project_dir: Optional[Path] = Non
                 stack.extend(adj.get(cur, []))
         return seen
 
-    # 1. Task-level Root-Cause Schedule Slip, Overdue & Downstream Cross-Perimeter Contagion
+    # 1. Hard Target Deadline Breach (Negative Float!)
+    t_margin = m.get("target_margin_days")
+    if t_margin is not None and float(t_margin) < 0:
+        register_alert(
+            fingerprint=f"HARD_DEADLINE_BREACH:{int(round(t_margin))}",
+            severity="CRITICAL",
+            category="SCHEDULE",
+            source_seat="PMO",
+            target_seats=["CEO", "COO", "CLO", "CFO", "CHRO"],
+            title=f"Hard Target Deadline BREACHED by {abs(t_margin):.1f} days ({m.get('forecast_end_date')} > {m.get('target_end_date')})",
+            upstream_cause=f"Critical Path ({' -> '.join(m.get('critical_path', []))}) exceeds non-negotiable target deadline (Negative Float = {t_margin:.1f}d).",
+            preventive_action="Trigger Fast-Tracking (SS overlap), Crashing, or formal lease/contract extension negotiation immediately.",
+        )
+
+    # 2. Task-level Schedule Slip, Overdue, Overrun & Blockers
     for t in tasks:
         comp = t.get("computed", {})
         tid = t["id"]
         owner = t.get("owner_seat", "PMO")
         own_slip = float(comp.get("own_slip_days", 0.0))
         overrun = float(comp.get("budget_overrun_eur", 0.0))
-        planned_b = float(t.get("planned_budget", 0.0))
+        revised_b = float(comp.get("revised_budget", t.get("planned_budget", 0.0)))
 
-        # Propagate ROOT-CAUSE duration slip transitively to all downstream Directors
         if own_slip >= 1.5:
             desc_ids = transitive_downstream(tid)
             downstream_seats: List[str] = []
             for d_id in desc_ids:
                 other = by_id[d_id]
                 downstream_seats.append(other.get("owner_seat", "PMO"))
-                for c_seat in other.get("coupled_seats", {}).keys():
-                    downstream_seats.append(c_seat)
+                downstream_seats.extend(other.get("coupled_seats", {}).keys())
             severity = "CRITICAL" if comp.get("is_critical") else "WARNING"
             cascade_desc = ", ".join(f"{d_id} ({by_id[d_id].get('owner_seat', 'PMO')})" for d_id in desc_ids) or "Project Completion"
             register_alert(
@@ -391,8 +594,8 @@ def run_contagion_radar(state: Dict[str, Any], project_dir: Optional[Path] = Non
                 target_seats=downstream_seats + ["PMO", "COO"],
                 task_id=tid,
                 title=f"Upstream schedule slip on {tid} (+{own_slip}d) -> cascading into {cascade_desc}",
-                upstream_cause=f"Source workstream '{t['name']}' ({owner}) extended by +{own_slip}d ({'Critical Path: shifts target completion date' if comp.get('is_critical') else 'Float erosion'}).",
-                preventive_action="Pre-stage prerequisites for impacted downstream Directors in parallel to absorb the slip before Go-Live.",
+                upstream_cause=f"Source workstream '{t['name']}' ({owner}) extended by +{own_slip}d ({'Critical Path shift' if comp.get('is_critical') else 'Float erosion'}).",
+                preventive_action="Pre-stage prerequisites for impacted downstream owners in parallel to absorb the slip.",
             )
 
         if comp.get("is_overdue"):
@@ -408,24 +611,20 @@ def run_contagion_radar(state: Dict[str, Any], project_dir: Optional[Path] = Non
                 preventive_action=f"Convene flash Steering Check with PMO + {owner} to unblock or re-sequence.",
             )
 
-        # Cost / Commitment overrun contagion -> CFO + CRO-Risk + coupled seats
-        if overrun > 0 and (planned_b == 0 or (overrun / max(1.0, planned_b)) >= 0.10):
-            pct = round((overrun / planned_b) * 100.0, 1) if planned_b > 0 else 100.0
-            sev = "CRITICAL" if pct >= 25.0 else "WARNING"
-            ccy = state.get("currency", "USD")
+        if overrun > 0 and (revised_b == 0 or (overrun / max(1.0, revised_b)) >= 0.08):
+            pct = round((overrun / revised_b) * 100.0, 1) if revised_b > 0 else 100.0
             register_alert(
                 fingerprint=f"COST:{tid}:{int(overrun)}",
-                severity=sev,
+                severity="CRITICAL" if pct >= 20.0 else "WARNING",
                 category="COST",
                 source_seat=owner,
                 target_seats=["CFO", "CRO-Risk", "PMO"] + list(t.get("coupled_seats", {}).keys()),
                 task_id=tid,
-                title=f"Upstream budget overrun on {tid} (+{overrun:,.0f} {ccy} / +{pct}%)",
-                upstream_cause=f"Committed/actual spend ({comp.get('committed_cost'):,.0f} {ccy}) exceeds baseline budget ({planned_b:,.0f} {ccy}) on '{t['name']}'.",
-                preventive_action="Immediate CFO contingency review and CRO-Risk check against pre-committed Kill Criteria.",
+                title=f"Workstream budget overrun on {tid} (+{overrun:,.0f} {ccy} / +{pct}%)",
+                upstream_cause=f"Forecast EAC ({comp.get('task_eac_eur'):,.0f} {ccy}) exceeds revised budget ({revised_b:,.0f} {ccy}) on '{t['name']}'.",
+                preventive_action="Log formal Change Order (TMA) and validate contingency drawdown with CFO before committing spend.",
             )
 
-        # Blocked status contagion
         if t.get("status") == "BLOCKED":
             register_alert(
                 fingerprint=f"BLOCKED:{tid}",
@@ -436,29 +635,124 @@ def run_contagion_radar(state: Dict[str, Any], project_dir: Optional[Path] = Non
                 task_id=tid,
                 title=f"Critical blocker declared on {tid} ({t['name']})",
                 upstream_cause=t.get("notes", "Operational blocker flagged by task owner."),
-                preventive_action="Escalate immediately to coupled Directors and CEO for arbitration.",
+                preventive_action="Escalate immediately to coupled Directors and Sponsor for arbitration.",
             )
 
-    # 2. Global EVM CPI / SPI drift check
-    evm = state.get("metrics", {}).get("evm", {})
+    # 3. Contingency Exhaustion & Quantified Risk EMV Coverage Check
+    if evm.get("contingency_remaining_eur", 0) < 0:
+        register_alert(
+            fingerprint="CONTINGENCY_EXHAUSTED",
+            severity="CRITICAL",
+            category="COST",
+            source_seat="CFO",
+            target_seats=["CEO", "PMO", "CRO-Risk"],
+            title=f"Project Contingency EXHAUSTED ({evm.get('contingency_remaining_eur'):,.0f} {ccy})",
+            upstream_cause=f"Approved Change Orders ({evm.get('approved_changes_eur'):,.0f} {ccy}) exceeded initial project contingency ({evm.get('contingency_eur'):,.0f} {ccy}).",
+            preventive_action="Request formal ComEx Management Reserve release or execute value-engineering descoping.",
+        )
+    elif qcdr.get("risk_emv_eur", 0) > max(0.0, evm.get("contingency_remaining_eur", 0)) and qcdr.get("risk_emv_eur", 0) > 0:
+        register_alert(
+            fingerprint=f"EMV_EXCEEDS_CONTINGENCY:{int(qcdr['risk_emv_eur'])}",
+            severity="WARNING",
+            category="RISK",
+            source_seat="CRO-Risk",
+            target_seats=["CFO", "PMO", "CEO"],
+            title=f"Quantified Risk EMV ({qcdr['risk_emv_eur']:,.0f} {ccy}) exceeds remaining contingency ({evm.get('contingency_remaining_eur'):,.0f} {ccy})",
+            upstream_cause=f"{qcdr.get('open_risks_count')} open risks carry {qcdr['risk_emv_eur']:,.0f} {ccy} expected exposure and {qcdr.get('risk_expected_delay_days')}d expected delay.",
+            preventive_action="Accelerate top risk mitigations or expand contingency buffer before signing irreversible commitments.",
+        )
+
+    # 4. HSE / Compliance / Testing / Reserves Go-Live Gate Contagion
+    for item in state.get("compliance_register", []):
+        cid = item.get("id", "HSE")
+        has_open_res = bool(str(item.get("reserves", "")).strip()) and not bool(item.get("reserves_lifted", False))
+        missing_cert = not bool(item.get("certificate_issued", False))
+        is_blocker = bool(item.get("blocking_go_live", True))
+        if has_open_res:
+            rem_c = float(item.get("remediation_cost_eur", 0.0))
+            rem_d = float(item.get("remediation_delay_days", 0.0))
+            register_alert(
+                fingerprint=f"HSE_RESERVE:{cid}:{int(rem_c)}:{int(rem_d)}",
+                severity="CRITICAL" if is_blocker else "WARNING",
+                category="HSE",
+                source_seat=item.get("owner_seat", "CCO-Compliance"),
+                target_seats=["COO", "CFO", "CLO", "PMO"],
+                task_id=item.get("linked_task_id") or None,
+                title=f"Unlifted HSE/Compliance Reserve on {cid} ({item.get('standard', '')}): +{rem_c:,.0f} {ccy} / +{rem_d}d",
+                upstream_cause=f"Requirement '{item.get('requirement')}' has open reserve: {item.get('reserves')}. Go-Live blocked={is_blocker}.",
+                preventive_action="Issue corrective work order (linked task + TMA), re-test with accredited inspector, and collect signed clearance certificate.",
+            )
+        elif is_blocker and missing_cert and str(item.get("status", "")).upper() in ("NON_COMPLIANT", "FAILED", "BLOCKED"):
+            register_alert(
+                fingerprint=f"HSE_NONCOMPLIANT:{cid}",
+                severity="CRITICAL",
+                category="COMPLIANCE",
+                source_seat=item.get("owner_seat", "CCO-Compliance"),
+                target_seats=["CEO", "CLO", "COO", "CFO", "PMO"],
+                title=f"Go-Live BLOCKED: Non-compliant requirement {cid} ({item.get('requirement')})",
+                upstream_cause=f"Mandatory standard '{item.get('standard')}' flagged {item.get('status')} with no compliance certificate.",
+                preventive_action="Halt occupancy/Go-Live until remediation works pass accredited certification.",
+            )
+
+    # 5. Contractual Negotiation & Suspensive Conditions Contagion
+    for ct in state.get("contracts_register", []):
+        ctid = ct.get("id", "CTR")
+        st = str(ct.get("status", "")).upper()
+        if st in ("DISPUTED", "BLOCKED", "REJECTED"):
+            register_alert(
+                fingerprint=f"CONTRACT_DEADLOCK:{ctid}",
+                severity="CRITICAL" if ct.get("is_suspensive_condition") or ct.get("hse_compliance_linked") else "WARNING",
+                category="LEGAL",
+                source_seat=ct.get("owner_seat", "CLO"),
+                target_seats=["CEO", "CFO", "CCO-Compliance", "PMO"],
+                title=f"Contractual deadlock on {ctid} ({ct.get('clause_topic')} · {ct.get('counterparty')})",
+                upstream_cause=f"Status={st} (HSE-linked={ct.get('hse_compliance_linked', False)}, Exposure={float(ct.get('financial_exposure_eur', 0)):,.0f} {ccy}).",
+                preventive_action="Escalate walk-away BATNA / redline fallback to Sponsor before signing.",
+            )
+        if ct.get("is_suspensive_condition") and st not in ("LIFTED", "SATISFIED", "SIGNED") and ct.get("deadline"):
+            days_left = (parse_date(ct["deadline"]) - as_of).days
+            if days_left <= 14:
+                register_alert(
+                    fingerprint=f"SUSPENSIVE_DUE:{ctid}",
+                    severity="CRITICAL" if days_left <= 5 else "WARNING",
+                    category="LEGAL",
+                    source_seat="CLO",
+                    target_seats=["CEO", "CFO", "CCO-Compliance", "PMO"],
+                    title=f"Suspensive condition {ctid} due in {days_left}d ({ct['deadline']}): {ct.get('clause_topic')}",
+                    upstream_cause=f"Unlifted suspensive condition with {ct.get('counterparty')} risks automatic contract lapse or forced waiver.",
+                    preventive_action="Deliver clearance proof or sign formal written extension before deadline expires.",
+                )
+
+    # 6. Global EVM CPI / SPI drift
     if evm.get("ac_eur", 0) > 0 and evm.get("cpi", 1.0) < 0.90:
-        ccy = state.get("currency", "USD")
         register_alert(
             fingerprint=f"EVM_CPI:{evm['cpi']}",
             severity="CRITICAL" if evm["cpi"] < 0.80 else "WARNING",
             category="COST",
             source_seat="PMO",
-            target_seats=["CFO", "CRO-Risk", "CEO"],
-            title=f"EVM Alert: Degraded Cost Performance Index (CPI = {evm['cpi']})",
-            upstream_cause=f"Projected EAC at {evm['eac_eur']:,.0f} {ccy} vs baseline BAC of {evm['bac_eur']:,.0f} {ccy}.",
-            preventive_action="Freeze non-critical spend with CFO and cut non-essential scope with CPO/COO.",
+            target_seats=["CFO", "CEO", "CRO-Risk"],
+            title=f"Portfolio Cost Efficiency Alert (CPI = {evm['cpi']} < 0.90)",
+            upstream_cause=f"Projected EAC ({evm['eac_eur']:,.0f} {ccy}) vs Revised Budget ({evm['revised_budget_eur']:,.0f} {ccy}).",
+            preventive_action="Freeze discretionary spend and audit top variance workstreams.",
         )
 
-    # Update overall RAG health
+    if evm.get("pv_eur", 0) > 0 and evm.get("spi", 1.0) < 0.85:
+        register_alert(
+            fingerprint=f"EVM_SPI:{evm['spi']}",
+            severity="CRITICAL" if evm["spi"] < 0.75 else "WARNING",
+            category="SCHEDULE",
+            source_seat="PMO",
+            target_seats=["COO", "CEO", "CHRO"],
+            title=f"Schedule Velocity Lag Alert (SPI = {evm['spi']} < 0.85)",
+            upstream_cause=f"Earned value ({evm['ev_eur']:,.0f} {ccy}) lags planned value ({evm['pv_eur']:,.0f} {ccy}).",
+            preventive_action="Re-allocate bandwidth to Critical Path tasks and remove external bottlenecks.",
+        )
+
+    # 7. Overall RAG computation
     open_alerts = [a for a in existing_alerts if a.get("status") == "OPEN"]
-    if any(a.get("severity") == "CRITICAL" for a in open_alerts):
+    if any(a.get("severity") == "CRITICAL" for a in open_alerts) or (t_margin is not None and float(t_margin) < 0):
         state["overall_rag"] = "RED"
-    elif any(a.get("severity") == "WARNING" for a in open_alerts):
+    elif open_alerts or qcdr.get("blocking_compliance_open", 0) > 0:
         state["overall_rag"] = "AMBER"
     else:
         state["overall_rag"] = "GREEN"
@@ -466,343 +760,247 @@ def run_contagion_radar(state: Dict[str, Any], project_dir: Optional[Path] = Non
     return new_alerts
 
 
-def export_csvs(project_dir: Path, state: Dict[str, Any]) -> None:
-    exp_dir = project_dir / "exports"
-    exp_dir.mkdir(parents=True, exist_ok=True)
-
-    # 1. Schedule & CPM Gantt CSV
-    with (exp_dir / "gantt_schedule.csv").open("w", encoding="utf-8", newline="") as f:
-        w = csv.writer(f)
-        w.writerow([
-            "Task_ID", "Phase", "Name", "Owner_Seat", "Status", "Progress_Pct",
-            "Depends_On", "Planned_Start", "Planned_End", "Forecast_Start",
-            "Forecast_End", "Duration_Days", "Float_Days", "Is_Critical", "Slip_Days", "Hard_Gate"
-        ])
-        for t in state.get("tasks", []):
-            c = t.get("computed", {})
-            w.writerow([
-                t["id"], t.get("phase", ""), t["name"], t.get("owner_seat", ""),
-                t.get("status", "TODO"), t.get("progress_pct", 0),
-                "|".join(t.get("depends_on", [])),
-                c.get("planned_start", ""), c.get("planned_end", ""),
-                c.get("forecast_start", ""), c.get("forecast_end", ""),
-                c.get("duration_days", 0), c.get("total_float_days", 0),
-                c.get("is_critical", False), c.get("slip_days", 0),
-                t.get("hard_gate", ""),
-            ])
-
-    # 2. Budget & EVM CSV
-    with (exp_dir / "budget_evm.csv").open("w", encoding="utf-8", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(["Task_ID", "Name", "Owner_Seat", "Planned_EUR", "Committed_EUR", "Actual_EUR", "Overrun_EUR"])
-        for t in state.get("tasks", []):
-            c = t.get("computed", {})
-            w.writerow([
-                t["id"], t["name"], t.get("owner_seat", ""),
-                t.get("planned_budget", 0), c.get("committed_cost", 0),
-                t.get("actual_cost", 0), c.get("budget_overrun_eur", 0),
-            ])
-
-    # 3. Alerts & Contagion CSV
-    with (exp_dir / "contagion_alerts.csv").open("w", encoding="utf-8", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(["Alert_ID", "Status", "Severity", "Category", "Source_Seat", "Target_Seats", "Task_ID", "Title", "Preventive_Action"])
-        for a in state.get("alerts", []):
-            w.writerow([
-                a["id"], a.get("status", "OPEN"), a.get("severity", ""),
-                a.get("category", ""), a.get("source_seat", ""),
-                "|".join(a.get("target_seats", [])), a.get("task_id", ""),
-                a.get("title", ""), a.get("preventive_action", ""),
-            ])
-
-
 def render_dashboard_html(project_dir: Path, state: Dict[str, Any]) -> Path:
+    """Renders the upgraded 360° Q-C-D-R Multi-Section HTML Executive Cockpit."""
     m = state.get("metrics", {})
     evm = m.get("evm", {})
-    tasks = state.get("tasks", [])
-    alerts = state.get("alerts", [])
-    open_alerts = [a for a in alerts if a.get("status") == "OPEN"]
-    guardrails = state.get("guardrails", [])
-    kill_criteria = state.get("kill_criteria", [])
-    deliverables = state.get("deliverables", [])
-    ccy = html.escape(str(state.get("currency", "USD")))
-
-    total_days = max(1.0, float(m.get("forecast_duration_days", 1.0)), float(m.get("baseline_duration_days", 1.0)))
+    qcdr = m.get("qcdr", {})
+    ccy = state.get("currency", "EUR")
     rag = state.get("overall_rag", "GREEN")
-    rag_color = {"GREEN": "#10b981", "AMBER": "#f59e0b", "RED": "#ef4444"}.get(rag, "#38bdf8")
+    rag_color = {"GREEN": "#10b981", "AMBER": "#f59e0b", "RED": "#ef4444"}.get(rag, "#64748b")
 
-    # Collect unique seats for interactive filter
-    seats = sorted({
-        t.get("owner_seat", "PMO") for t in tasks
-    } | {
-        s for a in open_alerts for s in a.get("target_seats", [])
-    } | {
-        a.get("source_seat", "PMO") for a in open_alerts
-    })
+    tasks = state.get("tasks", [])
+    total_days = max(1.0, float(m.get("forecast_duration_days", 1.0)), float(m.get("baseline_duration_days", 1.0)))
+    seats = sorted({t.get("owner_seat", "PMO") for t in tasks} | {a.get("source_seat", "PMO") for a in state.get("alerts", [])})
+    seat_buttons = ['<button class="chip active" onclick="filterSeat(\'ALL\', this)">All Directors (360°)</button>'] + [
+        f'<button class="chip" onclick="filterSeat(\'{html.escape(s)}\', this)">{html.escape(s)}</button>' for s in seats
+    ]
 
-    seat_buttons = ['<button class="chip active" onclick="filterSeat(\'ALL\', this)">All Seats (360°)</button>']
-    for s in seats:
-        esc = html.escape(s)
-        seat_buttons.append(f'<button class="chip" onclick="filterSeat(\'{esc}\', this)">{esc}</button>')
+    # Alerts HTML
+    open_alerts = [a for a in state.get("alerts", []) if a.get("status") == "OPEN"]
+    alert_cards = []
+    for a in open_alerts:
+        sev = a.get("severity", "INFO")
+        border = {"CRITICAL": "#ef4444", "WARNING": "#f59e0b", "INFO": "#3b82f6"}.get(sev, "#64748b")
+        targets = ", ".join(a.get("target_seats", []))
+        seats_attr = " ".join([a.get("source_seat", "")] + a.get("target_seats", []))
+        alert_cards.append(
+            f'<div class="card alert-card seat-item" data-seats="{html.escape(seats_attr)}" style="border-left:4px solid {border};">'
+            f'<div class="alert-top"><span class="badge" style="background:{border};">{html.escape(sev)}</span>'
+            f'<span class="tag">{html.escape(a.get("category", ""))}</span>'
+            f'<span class="flow">{html.escape(a.get("source_seat", ""))} &rarr; {html.escape(targets)}</span></div>'
+            f'<div class="alert-title">{html.escape(a.get("title", ""))}</div>'
+            f'<div class="alert-meta"><strong>Cause:</strong> {html.escape(a.get("upstream_cause", ""))}</div>'
+            f'<div class="alert-meta"><strong>Action:</strong> {html.escape(a.get("preventive_action", ""))}</div></div>'
+        )
+    if not alert_cards:
+        alert_cards.append('<div class="empty">No active contagion alerts — all Q-C-D-R perimeters aligned.</div>')
 
-    # Build Gantt rows
+    # Gantt rows
     gantt_rows = []
     for t in tasks:
         c = t.get("computed", {})
-        left_pct = round((float(c.get("es", 0.0)) / total_days) * 100.0, 2)
-        width_pct = max(2.5, round((float(c.get("duration_days", 1.0)) / total_days) * 100.0, 2))
-        base_left = round((float(c.get("baseline_es", 0.0)) / total_days) * 100.0, 2)
-        base_width = max(2.0, round((float(c.get("baseline_ef", 1.0)) - float(c.get("baseline_es", 0.0))) / total_days * 100.0, 2))
-        prog = float(t.get("progress_pct", 0.0))
-        is_crit = c.get("is_critical", False)
-        bar_cls = "gantt-bar crit" if is_crit else "gantt-bar norm"
-        if t.get("status") == "DONE":
-            bar_cls = "gantt-bar done"
-        coupled = list(t.get("coupled_seats", {}).keys())
-        seat_tags = " ".join([t.get("owner_seat", "PMO")] + coupled)
-        slip_badge = f'<span class="badge red">+{c.get("slip_days")}d</span>' if float(c.get("slip_days", 0)) > 0 else ""
-        crit_badge = '<span class="badge crit-b">CRITICAL</span>' if is_crit else f'<span class="badge muted">Float {c.get("total_float_days")}d</span>'
+        b_left = round((c.get("baseline_es", 0) / total_days) * 100.0, 2)
+        b_width = max(1.5, round(((c.get("baseline_ef", 0) - c.get("baseline_es", 0)) / total_days) * 100.0, 2))
+        f_left = round((c.get("es", 0) / total_days) * 100.0, 2)
+        f_width = max(1.5, round((c.get("duration_days", 0) / total_days) * 100.0, 2))
+        bar_col = "#ef4444" if c.get("is_critical") else ("#f59e0b" if c.get("is_near_critical") else ("#10b981" if t.get("status") == "DONE" else "#3b82f6"))
+        seats_attr = " ".join([t.get("owner_seat", "")] + list(t.get("coupled_seats", {}).keys()))
+        crit_tag = ' <span class="mini-badge crit">CRITICAL</span>' if c.get("is_critical") else (' <span class="mini-badge warn">NEAR-CRIT</span>' if c.get("is_near_critical") else "")
+        gate_tag = f' <span class="mini-badge gate">{html.escape(str(t.get("hard_gate")))}</span>' if t.get("hard_gate") else ""
+        gantt_rows.append(
+            f'<div class="gantt-row seat-item" data-seats="{html.escape(seats_attr)}">'
+            f'<div class="gantt-label"><strong>{html.escape(t["id"])}</strong> {html.escape(t["name"])}{crit_tag}{gate_tag}'
+            f'<div class="sub">{html.escape(t.get("owner_seat", ""))} · {html.escape(t.get("status", ""))} ({t.get("progress_pct", 0)}%) · Float: {c.get("total_float_days", 0)}d · {c.get("forecast_start", "")} &rarr; {c.get("forecast_end", "")}</div></div>'
+            f'<div class="gantt-track"><div class="bar-base" style="left:{b_left}%;width:{b_width}%;"></div>'
+            f'<div class="bar-live" style="left:{f_left}%;width:{f_width}%;background:{bar_col};"><div class="bar-prog" style="width:{min(100, float(t.get("progress_pct", 0)))}%;"></div></div></div></div>'
+        )
 
-        gantt_rows.append(f"""
-        <div class="gantt-row seat-item" data-seats="{html.escape(seat_tags)}">
-          <div class="gantt-meta">
-            <div class="gantt-title"><strong>{html.escape(t['id'])}</strong> — {html.escape(t['name'])}</div>
-            <div class="gantt-sub">
-              <span class="seat-pill">{html.escape(t.get('owner_seat', 'PMO'))}</span>
-              {crit_badge} {slip_badge}
-              <span class="dates">{html.escape(c.get('forecast_start', ''))} → {html.escape(c.get('forecast_end', ''))}</span>
-            </div>
-          </div>
-          <div class="gantt-track">
-            <div class="gantt-baseline" style="left:{base_left}%;width:{base_width}%" title="Initial Baseline"></div>
-            <div class="{bar_cls}" style="left:{left_pct}%;width:{width_pct}%">
-              <div class="gantt-fill" style="width:{prog}%"></div>
-              <span class="gantt-label">{int(prog)}%</span>
-            </div>
-          </div>
-        </div>""")
-
-    # Build Contagion Alerts cards
-    alert_cards = []
-    for a in reversed(open_alerts):
-        sev = a.get("severity", "INFO")
-        sev_cls = {"CRITICAL": "al-crit", "WARNING": "al-warn", "INFO": "al-info"}.get(sev, "al-info")
-        targets = a.get("target_seats", [])
-        seat_tags = " ".join([a.get("source_seat", "")] + targets)
-        target_pills = " ".join(f'<span class="seat-pill target">→ {html.escape(ts)}</span>' for ts in targets)
-        alert_cards.append(f"""
-        <div class="alert-card {sev_cls} seat-item" data-seats="{html.escape(seat_tags)}">
-          <div class="alert-head">
-            <span class="badge {'red' if sev == 'CRITICAL' else 'amber'}">{html.escape(sev)} · {html.escape(a.get('category', ''))}</span>
-            <span class="seat-pill">Source: {html.escape(a.get('source_seat', ''))}</span>
-            {target_pills}
-            <span class="muted-id">{html.escape(a['id'])}</span>
-          </div>
-          <h4>{html.escape(a.get('title', ''))}</h4>
-          <p><strong>Upstream Cause:</strong> {html.escape(a.get('upstream_cause', ''))}</p>
-          <p class="action-line"><strong>Required Cross-Perimeter Countermeasure:</strong> {html.escape(a.get('preventive_action', ''))}</p>
-        </div>""")
-    if not alert_cards:
-        alert_cards.append('<div class="empty-ok">No open cross-perimeter contagion alerts — all C-Suite couplings are green.</div>')
-
-    # Budget table rows
+    # 5-Column Budget rows
     budget_rows = []
     for t in tasks:
         c = t.get("computed", {})
-        planned = float(t.get("planned_budget", 0.0))
-        committed = float(c.get("committed_cost", 0.0))
-        actual = float(t.get("actual_cost", 0.0))
-        over = float(c.get("budget_overrun_eur", 0.0))
-        over_html = f'<span class="badge red">+{over:,.0f} {ccy}</span>' if over > 0 else '<span class="badge green">OK</span>'
-        budget_rows.append(f"""
-        <tr class="seat-item" data-seats="{html.escape(t.get('owner_seat', 'PMO'))} CFO">
-          <td><strong>{html.escape(t['id'])}</strong> — {html.escape(t['name'])}</td>
-          <td><span class="seat-pill">{html.escape(t.get('owner_seat', 'PMO'))}</span></td>
-          <td class="num">{planned:,.0f} {ccy}</td>
-          <td class="num">{committed:,.0f} {ccy}</td>
-          <td class="num">{actual:,.0f} {ccy}</td>
-          <td>{over_html}</td>
-        </tr>""")
+        vac_t = float(c.get("task_vac_eur", 0))
+        v_col = "#ef4444" if vac_t < 0 else "#10b981"
+        budget_rows.append(
+            f'<tr class="seat-item" data-seats="{html.escape(t.get("owner_seat", ""))}">'
+            f'<td><strong>{html.escape(t["id"])}</strong> {html.escape(t["name"])}</td>'
+            f'<td>{html.escape(t.get("owner_seat", ""))}</td>'
+            f'<td class="num">{float(t.get("planned_budget", 0)):,.0f}</td>'
+            f'<td class="num">{float(c.get("approved_changes_eur", 0)):+,.0f}</td>'
+            f'<td class="num"><strong>{float(c.get("revised_budget", 0)):,.0f}</strong></td>'
+            f'<td class="num">{float(c.get("committed_cost", 0)):,.0f}</td>'
+            f'<td class="num">{float(t.get("actual_cost", 0)):,.0f}</td>'
+            f'<td class="num">{float(c.get("task_eac_eur", 0)):,.0f}</td>'
+            f'<td class="num" style="color:{v_col};font-weight:700;">{vac_t:+,.0f}</td></tr>'
+        )
 
-    # Guardrails & Kill Criteria
-    gr_items = []
-    for g in guardrails:
-        st = g.get("status", "LOCKED")
-        cls = "green" if st in ("VERIFIED", "ACTIVE", "LOCKED") else "amber"
-        gr_items.append(f"""
-        <li class="seat-item" data-seats="{html.escape(g.get('seat', 'PMO'))}">
-          <span class="seat-pill">{html.escape(g.get('seat', ''))}</span>
-          <span class="badge {cls}">{html.escape(st)}</span>
-          {html.escape(g.get('rule', ''))}
-        </li>""")
+    # Risks rows
+    risk_rows = []
+    for r in state.get("risk_register", []):
+        p = float(r.get("probability_pct", 0))
+        ci = float(r.get("cost_impact_eur", 0))
+        di = float(r.get("delay_impact_days", 0))
+        risk_rows.append(
+            f'<tr><td><strong>{html.escape(str(r.get("id", "")))}</strong></td><td>{html.escape(str(r.get("category", "")))}</td>'
+            f'<td>{html.escape(str(r.get("title", "")))}<div class="sub">{html.escape(str(r.get("mitigation", "")))}</div></td>'
+            f'<td>{html.escape(str(r.get("owner_seat", "")))}</td><td class="num">{p:.0f}%</td>'
+            f'<td class="num">{ci * p / 100.0:,.0f} {ccy}</td><td class="num">{di * p / 100.0:.1f}d</td><td>{html.escape(str(r.get("status", "OPEN")))}</td></tr>'
+        )
 
-    kc_items = []
-    for k in kill_criteria:
-        st = k.get("status", "ARMED")
-        cls = "red" if st == "TRIGGERED" else "crit-b"
-        kc_items.append(f"""
-        <li class="seat-item" data-seats="{html.escape(k.get('owner_seat', 'CRO-Risk'))} CEO PMO">
-          <span class="badge {cls}">{html.escape(st)}</span>
-          <strong>{html.escape(k.get('phase', ''))}:</strong> {html.escape(k.get('trigger', ''))}
-          <em>→ {html.escape(k.get('action', ''))}</em>
-        </li>""")
+    # HSE / Compliance / Reserves rows
+    comp_rows = []
+    for c in state.get("compliance_register", []):
+        blk = '<span class="mini-badge crit">BLOCKER</span>' if c.get("blocking_go_live", True) else ""
+        cert = "✅ ISSUED" if c.get("certificate_issued") else "❌ MISSING"
+        comp_rows.append(
+            f'<tr><td><strong>{html.escape(str(c.get("id", "")))}</strong> {blk}</td><td>{html.escape(str(c.get("standard", "")))}</td>'
+            f'<td>{html.escape(str(c.get("requirement", "")))}<div class="sub">Reserves: {html.escape(str(c.get("reserves") or "None"))}</div></td>'
+            f'<td>{html.escape(str(c.get("status", "")))}</td><td>{"Done" if c.get("test_completed") else "Pending"} ({html.escape(str(c.get("test_date", "TBD")))})</td>'
+            f'<td class="num">+{float(c.get("remediation_cost_eur", 0)):,.0f} {ccy} / +{float(c.get("remediation_delay_days", 0))}d</td>'
+            f'<td>{cert}</td></tr>'
+        )
 
-    deliv_items = []
-    for d in deliverables:
-        deliv_items.append(f"""
-        <li class="seat-item" data-seats="{html.escape(d.get('seat', 'PMO'))}">
-          <span class="seat-pill">{html.escape(d.get('seat', ''))}</span>
-          <strong>{html.escape(d.get('title', ''))}</strong> — <code>{html.escape(d.get('path', ''))}</code>
-          <span class="dates">({html.escape(d.get('summary', ''))})</span>
-        </li>""")
+    # Contracts rows
+    ct_rows = []
+    for ct in state.get("contracts_register", []):
+        susp = ' <span class="mini-badge warn">SUSPENSIVE</span>' if ct.get("is_suspensive_condition") else ""
+        hse_b = ' <span class="mini-badge gate">HSE</span>' if ct.get("hse_compliance_linked") else ""
+        ct_rows.append(
+            f'<tr><td><strong>{html.escape(str(ct.get("id", "")))}</strong>{susp}{hse_b}</td><td>{html.escape(str(ct.get("counterparty", "")))}</td>'
+            f'<td>{html.escape(str(ct.get("clause_topic", "")))}<div class="sub">Target: {html.escape(str(ct.get("target_position", "")))}</div></td>'
+            f'<td>{html.escape(str(ct.get("deadline", "N/A")))}</td><td class="num">{float(ct.get("financial_exposure_eur", 0)):,.0f} {ccy}</td>'
+            f'<td><strong>{html.escape(str(ct.get("status", "")))}</strong></td></tr>'
+        )
+
+    t_margin = m.get("target_margin_days")
+    deadline_sub = f"Hard Target: {m.get('target_end_date')} (Slack: {t_margin:+.1f}d)" if m.get("target_end_date") else f"P85 Buffered: {m.get('p85_duration_days', 0)}d"
 
     doc = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>ExCom Control Tower — {html.escape(state.get('project_name', 'Project'))}</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ExCom v3.3 Control Tower — {html.escape(state.get('project_name', 'Project'))}</title>
 <style>
-  :root {{
-    --bg: #0b1120; --panel: #111827; --panel2: #1e293b; --border: #334155;
-    --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8;
-    --green: #10b981; --amber: #f59e0b; --red: #ef4444; --crit: #f43f5e;
-  }}
-  * {{ box-sizing: border-box; }}
-  body {{ margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; padding: 24px; }}
-  .container {{ max-width: 1320px; margin: 0 auto; }}
-  header {{ display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; border-bottom: 1px solid var(--border); padding-bottom: 18px; margin-bottom: 22px; flex-wrap: wrap; }}
-  h1 {{ margin: 0 0 6px 0; font-size: 1.55rem; }}
-  .rag-pill {{ padding: 8px 16px; border-radius: 999px; font-weight: 700; background: {rag_color}22; color: {rag_color}; border: 1px solid {rag_color}; }}
-  .kpis {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(195px, 1fr)); gap: 14px; margin-bottom: 22px; }}
-  .kpi {{ background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }}
-  .kpi .lbl {{ font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }}
-  .kpi .val {{ font-size: 1.45rem; font-weight: 700; margin-top: 4px; }}
-  .kpi .sub {{ font-size: 0.8rem; color: var(--muted); margin-top: 3px; }}
-  .filter-bar {{ display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 22px; background: var(--panel); padding: 12px 16px; border-radius: 12px; border: 1px solid var(--border); }}
-  .chip {{ background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 999px; padding: 5px 12px; cursor: pointer; font-size: 0.82rem; }}
-  .chip.active {{ background: var(--accent); color: #0f172a; border-color: var(--accent); font-weight: 700; }}
-  section {{ background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; margin-bottom: 20px; }}
-  section h2 {{ margin: 0 0 14px 0; font-size: 1.1rem; color: var(--accent); display: flex; justify-content: space-between; align-items: center; }}
-  .gantt-row {{ display: grid; grid-template-columns: 380px 1fr; gap: 16px; align-items: center; padding: 10px 0; border-bottom: 1px solid #1e293b; }}
-  @media (max-width: 860px) {{ .gantt-row {{ grid-template-columns: 1fr; }} }}
-  .gantt-title {{ font-size: 0.92rem; }}
-  .gantt-sub {{ display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 4px; font-size: 0.78rem; color: var(--muted); }}
-  .gantt-track {{ position: relative; height: 30px; background: #0f172a; border-radius: 8px; border: 1px solid #1e293b; overflow: hidden; }}
-  .gantt-baseline {{ position: absolute; top: 4px; height: 5px; background: #64748b88; border-radius: 3px; }}
-  .gantt-bar {{ position: absolute; top: 11px; height: 15px; border-radius: 5px; overflow: hidden; display: flex; align-items: center; }}
-  .gantt-bar.crit {{ background: #f43f5e33; border: 1px solid var(--crit); }}
-  .gantt-bar.norm {{ background: #38bdf833; border: 1px solid var(--accent); }}
-  .gantt-bar.done {{ background: #10b98133; border: 1px solid var(--green); }}
-  .gantt-fill {{ height: 100%; background: currentColor; opacity: 0.45; }}
-  .gantt-bar.crit .gantt-fill {{ background: var(--crit); }}
-  .gantt-bar.norm .gantt-fill {{ background: var(--accent); }}
-  .gantt-bar.done .gantt-fill {{ background: var(--green); }}
-  .gantt-label {{ position: relative; z-index: 2; padding-left: 6px; font-size: 0.7rem; font-weight: 700; }}
-  .seat-pill {{ background: #1e293b; border: 1px solid #475569; color: #e2e8f0; padding: 2px 8px; border-radius: 6px; font-size: 0.74rem; font-weight: 600; }}
-  .seat-pill.target {{ background: #38bdf822; border-color: var(--accent); color: var(--accent); }}
-  .badge {{ padding: 2px 7px; border-radius: 5px; font-size: 0.72rem; font-weight: 700; }}
-  .badge.red {{ background: #ef444428; color: #fca5a5; border: 1px solid var(--red); }}
-  .badge.amber {{ background: #f59e0b28; color: #fcd34d; border: 1px solid var(--amber); }}
-  .badge.green {{ background: #10b98128; color: #6ee7b7; border: 1px solid var(--green); }}
-  .badge.crit-b {{ background: #f43f5e28; color: #fda4af; border: 1px solid var(--crit); }}
-  .badge.muted {{ background: #1e293b; color: var(--muted); }}
-  .alert-card {{ border-radius: 10px; padding: 13px 15px; margin-bottom: 12px; background: #0f172a; border-left: 4px solid var(--accent); }}
-  .alert-card.al-crit {{ border-left-color: var(--red); background: #ef444410; }}
-  .alert-card.al-warn {{ border-left-color: var(--amber); background: #f59e0b10; }}
-  .alert-head {{ display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 6px; }}
-  .alert-card h4 {{ margin: 4px 0 6px 0; font-size: 0.96rem; }}
-  .alert-card p {{ margin: 4px 0; font-size: 0.86rem; color: #cbd5e1; }}
-  .action-line {{ color: #f8fafc !important; }}
-  .muted-id {{ margin-left: auto; font-size: 0.75rem; color: var(--muted); font-family: monospace; }}
-  table {{ width: 100%; border-collapse: collapse; font-size: 0.88rem; }}
-  th, td {{ text-align: left; padding: 9px 10px; border-bottom: 1px solid #1e293b; }}
-  th {{ color: var(--muted); font-weight: 600; font-size: 0.78rem; text-transform: uppercase; }}
-  td.num {{ font-variant-numeric: tabular-nums; }}
-  .grid-2 {{ display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }}
-  @media (max-width: 900px) {{ .grid-2 {{ grid-template-columns: 1fr; }} }}
-  ul.clean {{ list-style: none; padding: 0; margin: 0; }}
-  ul.clean li {{ padding: 8px 0; border-bottom: 1px solid #1e293b; font-size: 0.87rem; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }}
-  .empty-ok {{ padding: 14px; border-radius: 8px; background: #10b98115; border: 1px solid var(--green); color: #6ee7b7; font-size: 0.9rem; }}
+  :root {{ --bg:#0b1120; --panel:#111827; --card:#1e293b; --text:#f1f5f9; --muted:#94a3b8; --border:#334155; }}
+  * {{ box-sizing:border-box; }}
+  body {{ margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:var(--bg); color:var(--text); line-height:1.45; }}
+  .wrap {{ max-width:1420px; margin:0 auto; padding:24px; }}
+  header {{ display:flex; justify-content:space-between; align-items:flex-start; gap:16px; border-bottom:1px solid var(--border); padding-bottom:16px; margin-bottom:20px; }}
+  h1 {{ margin:0 0 6px; font-size:1.55rem; }}
+  .meta {{ color:var(--muted); font-size:0.86rem; }}
+  .rag-pill {{ padding:8px 16px; border-radius:999px; font-weight:700; font-size:0.9rem; background:{rag_color}; color:#fff; white-space:nowrap; }}
+  .kpis {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin-bottom:20px; }}
+  .kpi {{ background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:14px; }}
+  .kpi .lbl {{ color:var(--muted); font-size:0.74rem; text-transform:uppercase; letter-spacing:0.05em; }}
+  .kpi .val {{ font-size:1.38rem; font-weight:700; margin-top:4px; }}
+  .kpi .sub {{ font-size:0.78rem; color:var(--muted); margin-top:4px; }}
+  .filter-bar {{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:18px; align-items:center; }}
+  .chip {{ background:var(--panel); color:var(--text); border:1px solid var(--border); border-radius:999px; padding:5px 12px; cursor:pointer; font-size:0.8rem; }}
+  .chip.active {{ background:#2563eb; border-color:#2563eb; }}
+  section {{ background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:18px; overflow-x:auto; }}
+  h2 {{ margin:0 0 12px; font-size:1.08rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; }}
+  .card {{ background:var(--card); border-radius:8px; padding:12px 14px; margin-bottom:10px; }}
+  .alert-top {{ display:flex; gap:8px; align-items:center; margin-bottom:6px; flex-wrap:wrap; }}
+  .badge {{ padding:2px 8px; border-radius:4px; font-size:0.72rem; font-weight:700; color:#fff; }}
+  .tag {{ background:#334155; padding:2px 8px; border-radius:4px; font-size:0.72rem; }}
+  .flow {{ color:#93c5fd; font-size:0.8rem; font-weight:600; }}
+  .alert-title {{ font-weight:600; margin-bottom:4px; }}
+  .alert-meta {{ font-size:0.82rem; color:var(--muted); }}
+  .gantt-row {{ display:grid; grid-template-columns:340px 1fr; gap:14px; align-items:center; padding:8px 0; border-bottom:1px solid #1e293b; }}
+  .gantt-label {{ font-size:0.86rem; }}
+  .gantt-label .sub {{ font-size:0.74rem; color:var(--muted); margin-top:2px; }}
+  .gantt-track {{ position:relative; height:24px; background:#0f172a; border-radius:6px; overflow:hidden; }}
+  .bar-base {{ position:absolute; top:3px; height:6px; background:#475569; border-radius:3px; }}
+  .bar-live {{ position:absolute; top:11px; height:10px; border-radius:4px; overflow:hidden; }}
+  .bar-prog {{ height:100%; background:rgba(255,255,255,0.38); }}
+  .mini-badge {{ font-size:0.65rem; padding:1px 6px; border-radius:4px; font-weight:700; vertical-align:middle; }}
+  .mini-badge.crit {{ background:#991b1b; color:#fecaca; }}
+  .mini-badge.warn {{ background:#92400e; color:#fef3c7; }}
+  .mini-badge.gate {{ background:#1d4ed8; color:#dbeafe; }}
+  table {{ width:100%; border-collapse:collapse; font-size:0.82rem; }}
+  th, td {{ padding:8px 10px; border-bottom:1px solid #1e293b; text-align:left; vertical-align:top; }}
+  th {{ color:var(--muted); font-weight:600; font-size:0.74rem; text-transform:uppercase; }}
+  .num {{ text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }}
+  .sub {{ font-size:0.74rem; color:var(--muted); margin-top:2px; }}
+  .empty {{ color:var(--muted); font-style:italic; padding:8px 0; }}
 </style>
 </head>
 <body>
-<div class="container">
+<div class="wrap">
   <header>
     <div>
-      <h1>ExCom 360° Control Tower — {html.escape(state.get('project_name', ''))}</h1>
-      <div style="color:var(--muted);font-size:0.88rem;">
-        Locked Ruling: {html.escape(state.get('locked_decision', ''))} · As of <strong>{html.escape(m.get('as_of_date', ''))}</strong>
-      </div>
+      <h1>ExCom v3.3 — 360° Q-C-D-R Control Tower : {html.escape(state.get('project_name', 'Project'))}</h1>
+      <div class="meta">Methodology: <strong>{html.escape(str(state.get('methodology_id', 'PREDICTIVE_STAGE_GATE')))}</strong> · Start: {html.escape(state.get('start_date', ''))} · As-Of: {html.escape(m.get('as_of_date', ''))} · Exports: MS Project XML · Excel 7-Tab (.xlsx) · iCal (.ics) · CSV</div>
     </div>
-    <div class="rag-pill">OVERALL STATUS: {html.escape(rag)} · {len(open_alerts)} Active Alert(s)</div>
+    <div class="rag-pill">RAG: {html.escape(rag)}</div>
   </header>
 
   <div class="kpis">
     <div class="kpi">
-      <div class="lbl">Earned Progress (EV)</div>
-      <div class="val">{m.get('overall_progress_pct', 0)}%</div>
-      <div class="sub">Schedule Index (SPI): <strong>{evm.get('spi', 1.0)}</strong></div>
+      <div class="lbl">Schedule &amp; Hard Deadline</div>
+      <div class="val">{html.escape(m.get('forecast_end_date', ''))}</div>
+      <div class="sub">{html.escape(deadline_sub)} · Progress: {m.get('overall_progress_pct', 0)}%</div>
     </div>
     <div class="kpi">
-      <div class="lbl">Horizon &amp; Critical Path</div>
-      <div class="val">{m.get('forecast_duration_days', 0)} d</div>
-      <div class="sub">Forecast End: {html.escape(m.get('forecast_end_date', ''))} (P85: {m.get('p85_duration_days', 0)}d)</div>
+      <div class="lbl">5-Column Budget ({ccy})</div>
+      <div class="val">{evm.get('eac_eur', 0):,.0f} EAC</div>
+      <div class="sub">Revised: {evm.get('revised_budget_eur', 0):,.0f} · VAC: {evm.get('vac_eur', 0):+,.0f} · Contingency left: {evm.get('contingency_remaining_eur', 0):,.0f}</div>
     </div>
     <div class="kpi">
-      <div class="lbl">Baseline CAPEX (BAC)</div>
-      <div class="val">{evm.get('bac_eur', 0):,.0f} {ccy}</div>
-      <div class="sub">+ Contingency: {evm.get('contingency_eur', 0):,.0f} {ccy} · Committed: {evm.get('committed_eur', 0):,.0f} {ccy}</div>
+      <div class="lbl">Multi-Year TCO ({evm.get('tco_horizon_years', 6)}y)</div>
+      <div class="val">{evm.get('tco_total_eur', 0):,.0f} {ccy}</div>
+      <div class="sub">Annual OPEX: {evm.get('recurring_annual_opex_eur', 0):,.0f} · CPI {evm.get('cpi', 1.0)} / SPI {evm.get('spi', 1.0)}</div>
     </div>
     <div class="kpi">
-      <div class="lbl">Cost Efficiency (CPI / EAC)</div>
-      <div class="val">CPI {evm.get('cpi', 1.0)}</div>
-      <div class="sub">Forecast EAC: {evm.get('eac_eur', 0):,.0f} {ccy} · Annual OPEX: {evm.get('recurring_annual_opex_eur', 0):,.0f} {ccy}</div>
+      <div class="lbl">HSE / Compliance Go-Live Gate</div>
+      <div class="val">{html.escape(qcdr.get('go_live_gate_status', 'READY'))}</div>
+      <div class="sub">Certs: {qcdr.get('certificates_pct', 100)}% · Blockers: {qcdr.get('blocking_compliance_open', 0)} · Open Reserves: {qcdr.get('open_reserves_count', 0)}</div>
     </div>
     <div class="kpi">
-      <div class="lbl">Cross-Perimeter Contagion</div>
-      <div class="val">{len(open_alerts)}</div>
-      <div class="sub">Critical Path: {html.escape(' → '.join(m.get('critical_path', [])))}</div>
+      <div class="lbl">Risks (EMV) &amp; Contracts</div>
+      <div class="val">{qcdr.get('risk_emv_eur', 0):,.0f} {ccy}</div>
+      <div class="sub">Exp. Delay: {qcdr.get('risk_expected_delay_days', 0)}d · Suspensive Open: {qcdr.get('open_suspensive_conditions', 0)} · Alerts: {len(open_alerts)}</div>
     </div>
   </div>
 
   <div class="filter-bar">
-    <span style="font-size:0.84rem;color:var(--muted);font-weight:600;">Filter by Director / Perimeter:</span>
+    <span style="font-size:0.82rem;color:var(--muted);font-weight:600;">Filter by Director:</span>
     {''.join(seat_buttons)}
   </div>
 
   <section>
-    <h2><span>Upstream Cross-Director Contagion &amp; Alert Radar</span><span style="font-size:0.8rem;color:var(--muted);">Real-time DAG propagation</span></h2>
+    <h2><span>1. Upstream Cross-Perimeter Contagion Radar</span><span style="font-size:0.8rem;color:var(--muted);">{len(open_alerts)} open alerts</span></h2>
     {''.join(alert_cards)}
   </section>
 
   <section>
-    <h2><span>CPM Critical-Path Gantt &amp; Float (Gray Baseline vs Forecast)</span><span style="font-size:0.8rem;color:var(--muted);">Total Duration: {m.get('forecast_duration_days', 0)} days</span></h2>
+    <h2><span>2. CPM Critical-Path Gantt (FS/SS/FF + Hard Target)</span><span style="font-size:0.8rem;color:var(--muted);">Critical Path: {html.escape(' -> '.join(m.get('critical_path', [])))}</span></h2>
     {''.join(gantt_rows)}
   </section>
 
   <section>
-    <h2><span>CFO Budget &amp; EVM Control by Workstream</span><span style="font-size:0.8rem;color:var(--muted);">Total Envelope incl. Contingency: {evm.get('total_envelope_eur', 0):,.0f} {ccy}</span></h2>
+    <h2><span>3. 5-Column Budget &amp; Change-Order Control ({ccy})</span><span style="font-size:0.8rem;color:var(--muted);">Envelope incl. Contingency + Mgmt Reserve: {evm.get('total_envelope_eur', 0):,.0f} {ccy}</span></h2>
     <table>
-      <thead><tr><th>Workstream</th><th>Owner</th><th>Planned Budget</th><th>Committed / Quoted</th><th>Actual Spend (AC)</th><th>Variance</th></tr></thead>
+      <thead><tr><th>Workstream</th><th>Owner</th><th class="num">Initial BAC</th><th class="num">Approved TMA</th><th class="num">Revised</th><th class="num">Committed</th><th class="num">Actual AC</th><th class="num">Landing EAC</th><th class="num">Variance</th></tr></thead>
       <tbody>{''.join(budget_rows)}</tbody>
     </table>
   </section>
 
-  <div class="grid-2">
-    <section>
-      <h2><span>Non-Negotiable ExCom Guardrails</span></h2>
-      <ul class="clean">{''.join(gr_items)}</ul>
-    </section>
-    <section>
-      <h2><span>Pre-Committed Hard Kill Criteria</span></h2>
-      <ul class="clean">{''.join(kc_items)}</ul>
-    </section>
-  </div>
+  <section>
+    <h2><span>4. HSE, Regulatory Compliance, Testing &amp; Punch-List Reserves (Go-Live Gate)</span><span style="font-size:0.8rem;color:var(--muted);">Remediation impact: +{qcdr.get('compliance_remediation_cost_eur', 0):,.0f} {ccy} / +{qcdr.get('compliance_remediation_delay_days', 0)}d</span></h2>
+    {('<table><thead><tr><th>ID</th><th>Standard</th><th>Requirement &amp; Reserves</th><th>Status</th><th>Test</th><th class="num">Remediation Impact</th><th>Certificate</th></tr></thead><tbody>' + ''.join(comp_rows) + '</tbody></table>') if comp_rows else '<div class="empty">No compliance/HSE items registered yet.</div>'}
+  </section>
 
   <section>
-    <h2><span>Registered C-Suite Deliverables</span></h2>
-    <ul class="clean">{''.join(deliv_items) if deliv_items else '<li>No deliverables registered yet.</li>'}</ul>
+    <h2><span>5. Contractual Negotiation &amp; Suspensive Conditions</span><span style="font-size:0.8rem;color:var(--muted);">Open exposure: {qcdr.get('contracts_open_exposure_eur', 0):,.0f} {ccy}</span></h2>
+    {('<table><thead><tr><th>ID</th><th>Counterparty</th><th>Clause &amp; Target Position</th><th>Deadline</th><th class="num">Exposure</th><th>Status</th></tr></thead><tbody>' + ''.join(ct_rows) + '</tbody></table>') if ct_rows else '<div class="empty">No contracts/negotiation clauses registered yet.</div>'}
+  </section>
+
+  <section>
+    <h2><span>6. Quantified 360° Risk Register (EMV)</span><span style="font-size:0.8rem;color:var(--muted);">Total EMV: {qcdr.get('risk_emv_eur', 0):,.0f} {ccy} · {qcdr.get('risk_expected_delay_days', 0)}d</span></h2>
+    {('<table><thead><tr><th>ID</th><th>Category</th><th>Risk &amp; Mitigation</th><th>Owner</th><th class="num">Prob</th><th class="num">EMV Cost</th><th class="num">Exp. Delay</th><th>Status</th></tr></thead><tbody>' + ''.join(risk_rows) + '</tbody></table>') if risk_rows else '<div class="empty">No risks registered yet.</div>'}
   </section>
 </div>
 <script>
@@ -824,37 +1022,72 @@ function filterSeat(seat, btn) {{
     return out_path
 
 
-def save_and_refresh(project_dir: Path, state: Dict[str, Any], as_of: Optional[str] = None) -> Tuple[Path, List[Dict[str, Any]]]:
+def save_and_refresh(project_dir: Path, state: Dict[str, Any], as_of: Optional[str] = None) -> Tuple[Path, List[Dict[str, Any]], Dict[str, str]]:
     state["schema_version"] = SCHEMA_VERSION
     state["updated_at"] = now_iso()
     compute_schedule_and_evm(state, as_of_str=as_of)
     new_alerts = run_contagion_radar(state, project_dir=project_dir)
     write_json(project_dir / "project-state.json", state)
-    export_csvs(project_dir, state)
+    export_enterprise_csvs(project_dir, state)
+    msp_xml = export_msproject_xml(project_dir, state)
+    xlsx_wb = export_excel_xlsx(project_dir, state)
+    ics_cal = export_icalendar_ics(project_dir, state)
     dash = render_dashboard_html(project_dir, state)
-    return dash, new_alerts
+    artifacts = {
+        "dashboard_html": str(dash),
+        "msproject_xml": str(msp_xml),
+        "excel_xlsx": str(xlsx_wb),
+        "calendar_ics": str(ics_cal),
+        "exports_dir": str(project_dir / "exports"),
+    }
+    return dash, new_alerts, artifacts
+
+
+# ---------------------------------------------------------------------------
+# CLI Subcommands
+# ---------------------------------------------------------------------------
+
+def cmd_select_methodology(args: argparse.Namespace) -> None:
+    res = select_methodology(
+        description=args.description,
+        project_type=args.project_type,
+        uncertainty=args.uncertainty,
+        regulatory_irreversibility=args.regulatory,
+        capital_intensity=args.capital,
+        delivery_cadence=args.cadence,
+    )
+    print(json.dumps(res, ensure_ascii=False, indent=2))
 
 
 def cmd_init(args: argparse.Namespace) -> None:
     project_dir = Path(args.project_dir).resolve()
     spec = read_json(Path(args.spec).resolve())
+    if not spec.get("methodology_id"):
+        meth = select_methodology(
+            description=str(spec.get("locked_decision", "")) + " " + str(spec.get("project_name", "")),
+            project_type=str(spec.get("project_type", "")),
+        )
+        spec["methodology_id"] = meth["methodology_id"]
     (project_dir / "deliverables").mkdir(parents=True, exist_ok=True)
-    dash, new_alerts = save_and_refresh(project_dir, spec)
+    dash, new_alerts, artifacts = save_and_refresh(project_dir, spec)
     append_event(project_dir, {
         "type": "PROJECT_INITIALIZED",
         "actor": "PMO",
         "project_name": spec.get("project_name", ""),
+        "methodology_id": spec.get("methodology_id"),
         "tasks_count": len(spec.get("tasks", [])),
     })
     print(json.dumps({
         "status": "OK",
         "project_dir": str(project_dir),
-        "state_file": str(project_dir / "project-state.json"),
-        "dashboard_html": str(dash),
+        "methodology_id": spec.get("methodology_id"),
         "overall_rag": spec.get("overall_rag"),
         "critical_path": spec["metrics"]["critical_path"],
+        "target_margin_days": spec["metrics"].get("target_margin_days"),
+        "go_live_gate_status": spec["metrics"]["qcdr"]["go_live_gate_status"],
         "open_alerts_count": len([a for a in spec.get("alerts", []) if a.get("status") == "OPEN"]),
         "new_alerts_raised": len(new_alerts),
+        "artifacts": artifacts,
     }, ensure_ascii=False, indent=2))
 
 
@@ -866,39 +1099,175 @@ def cmd_update_task(args: argparse.Namespace) -> None:
         sys.exit(f"Error: task '{args.id}' not found.")
 
     changes: Dict[str, Any] = {}
-    if args.status is not None:
-        target["status"] = args.status
-        changes["status"] = args.status
-    if args.progress is not None:
-        target["progress_pct"] = args.progress
-        changes["progress_pct"] = args.progress
-    if args.forecast_days is not None:
-        target["forecast_days"] = args.forecast_days
-        changes["forecast_days"] = args.forecast_days
-    if args.committed_cost is not None:
-        target["committed_cost"] = args.committed_cost
-        changes["committed_cost"] = args.committed_cost
-    if args.actual_cost is not None:
-        target["actual_cost"] = args.actual_cost
-        changes["actual_cost"] = args.actual_cost
-    if args.note:
-        target["notes"] = args.note
-        changes["note"] = args.note
+    for attr, key in (
+        ("status", "status"), ("progress", "progress_pct"), ("forecast_days", "forecast_days"),
+        ("committed_cost", "committed_cost"), ("actual_cost", "actual_cost"), ("etc_cost", "etc_cost"), ("note", "notes"),
+    ):
+        val = getattr(args, attr, None)
+        if val is not None:
+            target[key] = val
+            changes[key] = val
 
-    append_event(project_dir, {
-        "type": "TASK_UPDATED",
-        "actor": args.actor,
-        "task_id": args.id,
-        "changes": changes,
-    })
-    dash, new_alerts = save_and_refresh(project_dir, state, as_of=args.as_of)
+    append_event(project_dir, {"type": "TASK_UPDATED", "actor": args.actor, "task_id": args.id, "changes": changes})
+    _, new_alerts, artifacts = save_and_refresh(project_dir, state, as_of=args.as_of)
     print(json.dumps({
-        "status": "OK",
-        "updated_task": args.id,
-        "overall_rag": state.get("overall_rag"),
-        "new_contagion_alerts": new_alerts,
-        "dashboard_html": str(dash),
+        "status": "OK", "updated_task": args.id, "overall_rag": state.get("overall_rag"),
+        "new_contagion_alerts": new_alerts, "artifacts": artifacts,
     }, ensure_ascii=False, indent=2))
+
+
+def cmd_add_change_order(args: argparse.Namespace) -> None:
+    project_dir = Path(args.project_dir).resolve()
+    state = read_json(project_dir / "project-state.json")
+    co = {
+        "id": args.id or f"TMA-{len(state.get('change_orders', [])) + 1:03d}",
+        "date": now_iso()[:10],
+        "title": args.title,
+        "linked_task_id": args.task_id or "",
+        "owner_seat": args.owner_seat,
+        "approved_by": args.approved_by,
+        "cost_impact_eur": float(args.cost_impact),
+        "delay_impact_days": float(args.delay_impact),
+        "status": args.status,
+    }
+    state.setdefault("change_orders", []).append(co)
+    append_event(project_dir, {"type": "CHANGE_ORDER_LOGGED", **co})
+    _, new_alerts, artifacts = save_and_refresh(project_dir, state)
+    print(json.dumps({"status": "OK", "change_order": co, "overall_rag": state.get("overall_rag"), "new_alerts": new_alerts, "artifacts": artifacts}, ensure_ascii=False, indent=2))
+
+
+def cmd_upsert_risk(args: argparse.Namespace) -> None:
+    project_dir = Path(args.project_dir).resolve()
+    state = read_json(project_dir / "project-state.json")
+    risks = state.setdefault("risk_register", [])
+    existing = next((r for r in risks if r.get("id") == args.id), None)
+    rec = {
+        "id": args.id,
+        "category": args.category,
+        "title": args.title,
+        "owner_seat": args.owner_seat,
+        "probability_pct": float(args.probability),
+        "cost_impact_eur": float(args.cost_impact),
+        "delay_impact_days": float(args.delay_impact),
+        "mitigation": args.mitigation,
+        "status": args.status,
+    }
+    if existing:
+        existing.update(rec)
+    else:
+        risks.append(rec)
+    append_event(project_dir, {"type": "RISK_UPSERTED", **rec})
+    _, new_alerts, artifacts = save_and_refresh(project_dir, state)
+    print(json.dumps({"status": "OK", "risk": rec, "overall_rag": state.get("overall_rag"), "new_alerts": new_alerts, "artifacts": artifacts}, ensure_ascii=False, indent=2))
+
+
+def cmd_upsert_compliance(args: argparse.Namespace) -> None:
+    project_dir = Path(args.project_dir).resolve()
+    state = read_json(project_dir / "project-state.json")
+    comp = state.setdefault("compliance_register", [])
+    existing = next((c for c in comp if c.get("id") == args.id), None)
+    rec = {
+        "id": args.id,
+        "domain": args.domain,
+        "requirement": args.requirement,
+        "standard": args.standard,
+        "status": args.status,
+        "test_required": not bool(args.no_test_required),
+        "test_completed": bool(args.test_completed),
+        "test_date": args.test_date or "",
+        "reserves": args.reserves or "",
+        "linked_task_id": args.task_id or "",
+        "remediation_cost_eur": float(args.remediation_cost),
+        "remediation_delay_days": float(args.remediation_delay),
+        "reserves_lifted": bool(args.reserves_lifted),
+        "certificate_issued": bool(args.certificate_issued),
+        "blocking_go_live": not bool(args.non_blocking),
+        "owner_seat": args.owner_seat,
+    }
+    if existing:
+        existing.update(rec)
+    else:
+        comp.append(rec)
+    append_event(project_dir, {"type": "COMPLIANCE_HSE_UPSERTED", **rec})
+    _, new_alerts, artifacts = save_and_refresh(project_dir, state)
+    print(json.dumps({"status": "OK", "compliance_item": rec, "go_live_gate_status": state["metrics"]["qcdr"]["go_live_gate_status"], "overall_rag": state.get("overall_rag"), "new_alerts": new_alerts, "artifacts": artifacts}, ensure_ascii=False, indent=2))
+
+
+def cmd_upsert_contract(args: argparse.Namespace) -> None:
+    project_dir = Path(args.project_dir).resolve()
+    state = read_json(project_dir / "project-state.json")
+    cts = state.setdefault("contracts_register", [])
+    existing = next((c for c in cts if c.get("id") == args.id), None)
+    rec = {
+        "id": args.id,
+        "contract_type": args.contract_type,
+        "counterparty": args.counterparty,
+        "clause_topic": args.clause_topic,
+        "target_position": args.target_position,
+        "counterparty_position": args.counterparty_position,
+        "hse_compliance_linked": bool(args.hse_linked),
+        "is_suspensive_condition": bool(args.suspensive),
+        "deadline": args.deadline or "",
+        "financial_exposure_eur": float(args.exposure),
+        "status": args.status,
+        "owner_seat": args.owner_seat,
+    }
+    if existing:
+        existing.update(rec)
+    else:
+        cts.append(rec)
+    append_event(project_dir, {"type": "CONTRACT_UPSERTED", **rec})
+    _, new_alerts, artifacts = save_and_refresh(project_dir, state)
+    print(json.dumps({"status": "OK", "contract": rec, "overall_rag": state.get("overall_rag"), "new_alerts": new_alerts, "artifacts": artifacts}, ensure_ascii=False, indent=2))
+
+
+def cmd_import_external(args: argparse.Namespace) -> None:
+    """Bidirectional import from MS Project XML or Excel/Smartsheet/Jira CSV into live Control Tower."""
+    project_dir = Path(args.project_dir).resolve()
+    state = read_json(project_dir / "project-state.json")
+    src_path = Path(args.file).resolve()
+    if args.cmd == "import-msproject":
+        incoming = import_msproject_xml(src_path)
+    else:
+        incoming = import_tasks_csv(src_path)
+
+    by_id = {t["id"]: t for t in state.get("tasks", [])}
+    updated, added = 0, 0
+    for item in incoming:
+        tid = item["id"]
+        if tid in by_id:
+            for k, v in item.items():
+                if k != "id" and v not in ("", None):
+                    by_id[tid][k] = v
+            updated += 1
+        else:
+            state.setdefault("tasks", []).append({
+                "id": tid,
+                "phase": item.get("phase", "Imported"),
+                "name": item.get("name", tid),
+                "owner_seat": item.get("owner_seat", "PMO"),
+                "depends_on": item.get("depends_on", []),
+                "duration_days": item.get("forecast_days", 5.0),
+                "forecast_days": item.get("forecast_days", 5.0),
+                "planned_budget": item.get("planned_budget", 0.0),
+                "actual_cost": item.get("actual_cost", 0.0),
+                "progress_pct": item.get("progress_pct", 0.0),
+                "status": item.get("status", "TODO"),
+                "notes": item.get("notes", ""),
+            })
+            added += 1
+
+    append_event(project_dir, {"type": "EXTERNAL_IMPORT", "source": str(src_path), "updated": updated, "added": added})
+    _, new_alerts, artifacts = save_and_refresh(project_dir, state)
+    print(json.dumps({"status": "OK", "imported_from": str(src_path), "tasks_updated": updated, "tasks_added": added, "overall_rag": state.get("overall_rag"), "new_alerts": len(new_alerts), "artifacts": artifacts}, ensure_ascii=False, indent=2))
+
+
+def cmd_export_copil(args: argparse.Namespace) -> None:
+    project_dir = Path(args.project_dir).resolve()
+    state = read_json(project_dir / "project-state.json")
+    _, _, artifacts = save_and_refresh(project_dir, state, as_of=args.as_of)
+    brief = export_copil_brief(project_dir, state)
+    print(json.dumps({"status": "OK", "copil_brief_md": str(brief), "artifacts": artifacts}, ensure_ascii=False, indent=2))
 
 
 def cmd_emit_signal(args: argparse.Namespace) -> None:
@@ -907,7 +1276,6 @@ def cmd_emit_signal(args: argparse.Namespace) -> None:
     raw_impacts = [s.strip() for s in (args.impacts or "").split(",") if s.strip()]
     auto_impacts = DEFAULT_DOMAIN_COUPLINGS.get(args.category, ["PMO"])
     targets = sorted({s for s in (raw_impacts + auto_impacts) if s and s != args.from_seat})
-
     alert = {
         "id": f"SIG-{uuid.uuid4().hex[:6].upper()}",
         "fingerprint": f"SIG:{args.from_seat}:{args.title[:40]}",
@@ -923,41 +1291,19 @@ def cmd_emit_signal(args: argparse.Namespace) -> None:
         "preventive_action": args.action_required,
     }
     state.setdefault("alerts", []).append(alert)
-    append_event(project_dir, {
-        "type": "CROSS_DIRECTOR_SIGNAL",
-        "signal_id": alert["id"],
-        "from_seat": args.from_seat,
-        "target_seats": targets,
-        "severity": args.severity,
-        "category": args.category,
-        "title": args.title,
-    })
-    dash, _ = save_and_refresh(project_dir, state)
-    print(json.dumps({
-        "status": "OK",
-        "signal_id": alert["id"],
-        "woken_target_seats": targets,
-        "overall_rag": state.get("overall_rag"),
-        "dashboard_html": str(dash),
-    }, ensure_ascii=False, indent=2))
+    append_event(project_dir, {"type": "CROSS_DIRECTOR_SIGNAL", "signal_id": alert["id"], "from_seat": args.from_seat, "target_seats": targets, "title": args.title})
+    _, _, artifacts = save_and_refresh(project_dir, state)
+    print(json.dumps({"status": "OK", "signal_id": alert["id"], "woken_target_seats": targets, "overall_rag": state.get("overall_rag"), "artifacts": artifacts}, ensure_ascii=False, indent=2))
 
 
 def cmd_register_deliverable(args: argparse.Namespace) -> None:
     project_dir = Path(args.project_dir).resolve()
     state = read_json(project_dir / "project-state.json")
-    entry = {
-        "id": f"DLV-{uuid.uuid4().hex[:6].upper()}",
-        "created_at": now_iso(),
-        "seat": args.seat,
-        "task_id": args.task_id,
-        "title": args.title,
-        "path": args.path,
-        "summary": args.summary,
-    }
+    entry = {"id": f"DLV-{uuid.uuid4().hex[:6].upper()}", "created_at": now_iso(), "seat": args.seat, "task_id": args.task_id, "title": args.title, "path": args.path, "summary": args.summary}
     state.setdefault("deliverables", []).append(entry)
     append_event(project_dir, {"type": "DELIVERABLE_PUBLISHED", **entry})
-    dash, _ = save_and_refresh(project_dir, state)
-    print(json.dumps({"status": "OK", "deliverable": entry, "dashboard_html": str(dash)}, ensure_ascii=False, indent=2))
+    _, _, artifacts = save_and_refresh(project_dir, state)
+    print(json.dumps({"status": "OK", "deliverable": entry, "artifacts": artifacts}, ensure_ascii=False, indent=2))
 
 
 def cmd_resolve_alert(args: argparse.Namespace) -> None:
@@ -970,14 +1316,9 @@ def cmd_resolve_alert(args: argparse.Namespace) -> None:
     alert["resolved_by"] = args.by_seat
     alert["resolution"] = args.resolution
     alert["resolved_at"] = now_iso()
-    append_event(project_dir, {
-        "type": "ALERT_RESOLVED",
-        "alert_id": args.alert_id,
-        "by_seat": args.by_seat,
-        "resolution": args.resolution,
-    })
-    dash, _ = save_and_refresh(project_dir, state)
-    print(json.dumps({"status": "OK", "overall_rag": state.get("overall_rag"), "dashboard_html": str(dash)}, ensure_ascii=False, indent=2))
+    append_event(project_dir, {"type": "ALERT_RESOLVED", "alert_id": args.alert_id, "by_seat": args.by_seat, "resolution": args.resolution})
+    _, _, artifacts = save_and_refresh(project_dir, state)
+    print(json.dumps({"status": "OK", "overall_rag": state.get("overall_rag"), "artifacts": artifacts}, ensure_ascii=False, indent=2))
 
 
 def cmd_audit(args: argparse.Namespace) -> None:
@@ -985,30 +1326,40 @@ def cmd_audit(args: argparse.Namespace) -> None:
     state = read_json(project_dir / "project-state.json")
     if args.as_of:
         state["as_of_date"] = args.as_of
-    dash, new_alerts = save_and_refresh(project_dir, state, as_of=args.as_of)
+    _, new_alerts, artifacts = save_and_refresh(project_dir, state, as_of=args.as_of)
     open_alerts = [a for a in state.get("alerts", []) if a.get("status") == "OPEN"]
     seats_to_summon = sorted({s for a in open_alerts for s in a.get("target_seats", [])})
     print(json.dumps({
         "overall_rag": state.get("overall_rag"),
+        "methodology_id": state.get("methodology_id"),
         "metrics": state.get("metrics"),
         "open_alerts_count": len(open_alerts),
         "newly_detected_alerts": len(new_alerts),
         "directors_to_summon_preemptively": seats_to_summon,
         "open_alerts": open_alerts,
-        "dashboard_html": str(dash),
+        "artifacts": artifacts,
     }, ensure_ascii=False, indent=2))
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="ExCom v2.0 Control Tower & Cross-Perimeter Contagion CLI")
+    p = argparse.ArgumentParser(description="ExCom v3.3 — 360° Enterprise Q-C-D-R Control Tower & Interchange CLI")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    p_init = sub.add_parser("init", help="Initialize a project Control Tower from a JSON spec")
+    p_sel = sub.add_parser("select-methodology", help="Deterministically select optimal project methodology & WBS structure")
+    p_sel.add_argument("--description", default="")
+    p_sel.add_argument("--project-type", default="")
+    p_sel.add_argument("--uncertainty", choices=["LOW", "MEDIUM", "HIGH"], default="MEDIUM")
+    p_sel.add_argument("--regulatory", choices=["LOW", "MEDIUM", "HIGH"], default="MEDIUM")
+    p_sel.add_argument("--capital", choices=["LOW", "MEDIUM", "HIGH"], default="MEDIUM")
+    p_sel.add_argument("--cadence", choices=["MILESTONE", "ITERATIVE", "CONTINUOUS"], default="MILESTONE")
+    p_sel.set_defaults(func=cmd_select_methodology)
+
+    p_init = sub.add_parser("init", help="Initialize 360° Q-C-D-R Control Tower & export MS Project XML / Excel / ICS / CSV")
     p_init.add_argument("--project-dir", required=True)
     p_init.add_argument("--spec", required=True)
     p_init.set_defaults(func=cmd_init)
 
-    p_upd = sub.add_parser("update-task", help="Update task progress/schedule/cost and run contagion propagation")
+    p_upd = sub.add_parser("update-task", help="Update task schedule/budget/progress and propagate contagion")
     p_upd.add_argument("--project-dir", required=True)
     p_upd.add_argument("--id", required=True)
     p_upd.add_argument("--actor", required=True)
@@ -1017,9 +1368,86 @@ def build_parser() -> argparse.ArgumentParser:
     p_upd.add_argument("--forecast-days", type=float)
     p_upd.add_argument("--committed-cost", type=float)
     p_upd.add_argument("--actual-cost", type=float)
+    p_upd.add_argument("--etc-cost", type=float)
     p_upd.add_argument("--note")
     p_upd.add_argument("--as-of")
     p_upd.set_defaults(func=cmd_update_task)
+
+    p_co = sub.add_parser("add-change-order", help="Log a formal Change Order / TMA affecting 5-column budget & schedule")
+    p_co.add_argument("--project-dir", required=True)
+    p_co.add_argument("--id", default="")
+    p_co.add_argument("--title", required=True)
+    p_co.add_argument("--task-id", default="")
+    p_co.add_argument("--owner-seat", default="PMO")
+    p_co.add_argument("--approved-by", default="Sponsor")
+    p_co.add_argument("--cost-impact", type=float, required=True)
+    p_co.add_argument("--delay-impact", type=float, default=0.0)
+    p_co.add_argument("--status", choices=["PENDING", "APPROVED", "REJECTED"], default="PENDING")
+    p_co.set_defaults(func=cmd_add_change_order)
+
+    p_rk = sub.add_parser("upsert-risk", help="Add or update a quantified EMV risk in the 360° Risk Register")
+    p_rk.add_argument("--project-dir", required=True)
+    p_rk.add_argument("--id", required=True)
+    p_rk.add_argument("--category", required=True)
+    p_rk.add_argument("--title", required=True)
+    p_rk.add_argument("--owner-seat", default="CRO-Risk")
+    p_rk.add_argument("--probability", type=float, required=True)
+    p_rk.add_argument("--cost-impact", type=float, required=True)
+    p_rk.add_argument("--delay-impact", type=float, default=0.0)
+    p_rk.add_argument("--mitigation", default="")
+    p_rk.add_argument("--status", choices=["OPEN", "MITIGATED", "CLOSED"], default="OPEN")
+    p_rk.set_defaults(func=cmd_upsert_risk)
+
+    p_cp = sub.add_parser("upsert-compliance", help="Add or update an HSE / Regulatory Compliance / Testing / Reserve item")
+    p_cp.add_argument("--project-dir", required=True)
+    p_cp.add_argument("--id", required=True)
+    p_cp.add_argument("--domain", default="HSE")
+    p_cp.add_argument("--requirement", required=True)
+    p_cp.add_argument("--standard", default="")
+    p_cp.add_argument("--status", choices=["PENDING", "IN_PROGRESS", "COMPLIANT", "NON_COMPLIANT", "WITH_RESERVES", "BLOCKED"], default="PENDING")
+    p_cp.add_argument("--no-test-required", action="store_true")
+    p_cp.add_argument("--test-completed", action="store_true")
+    p_cp.add_argument("--test-date", default="")
+    p_cp.add_argument("--reserves", default="")
+    p_cp.add_argument("--task-id", default="")
+    p_cp.add_argument("--remediation-cost", type=float, default=0.0)
+    p_cp.add_argument("--remediation-delay", type=float, default=0.0)
+    p_cp.add_argument("--reserves-lifted", action="store_true")
+    p_cp.add_argument("--certificate-issued", action="store_true")
+    p_cp.add_argument("--non-blocking", action="store_true")
+    p_cp.add_argument("--owner-seat", default="CCO-Compliance")
+    p_cp.set_defaults(func=cmd_upsert_compliance)
+
+    p_ct = sub.add_parser("upsert-contract", help="Add or update a contractual negotiation clause / suspensive condition")
+    p_ct.add_argument("--project-dir", required=True)
+    p_ct.add_argument("--id", required=True)
+    p_ct.add_argument("--contract-type", required=True)
+    p_ct.add_argument("--counterparty", required=True)
+    p_ct.add_argument("--clause-topic", required=True)
+    p_ct.add_argument("--target-position", default="")
+    p_ct.add_argument("--counterparty-position", default="")
+    p_ct.add_argument("--hse-linked", action="store_true")
+    p_ct.add_argument("--suspensive", action="store_true")
+    p_ct.add_argument("--deadline", default="")
+    p_ct.add_argument("--exposure", type=float, default=0.0)
+    p_ct.add_argument("--status", choices=["DRAFT", "NEGOTIATING", "DISPUTED", "SIGNED", "LIFTED", "REJECTED"], default="NEGOTIATING")
+    p_ct.add_argument("--owner-seat", default="CLO")
+    p_ct.set_defaults(func=cmd_upsert_contract)
+
+    p_imp_xml = sub.add_parser("import-msproject", help="Import/sync tasks from MS Project / Primavera / Smartsheet MSPDI .xml")
+    p_imp_xml.add_argument("--project-dir", required=True)
+    p_imp_xml.add_argument("--file", required=True)
+    p_imp_xml.set_defaults(func=cmd_import_external)
+
+    p_imp_csv = sub.add_parser("import-csv", help="Import/sync tasks from Excel/Smartsheet/Jira CSV (comma or semicolon)")
+    p_imp_csv.add_argument("--project-dir", required=True)
+    p_imp_csv.add_argument("--file", required=True)
+    p_imp_csv.set_defaults(func=cmd_import_external)
+
+    p_copil = sub.add_parser("export-copil", help="Generate 1-click Steering Committee (CoPil) Executive Brief")
+    p_copil.add_argument("--project-dir", required=True)
+    p_copil.add_argument("--as-of", default=None)
+    p_copil.set_defaults(func=cmd_export_copil)
 
     p_sig = sub.add_parser("emit-signal", help="Emit an upstream cross-director drift/discovery signal")
     p_sig.add_argument("--project-dir", required=True)
@@ -1049,7 +1477,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_res.add_argument("--resolution", required=True)
     p_res.set_defaults(func=cmd_resolve_alert)
 
-    p_aud = sub.add_parser("audit", help="Run a 360-degree drift, EVM & contagion audit")
+    p_aud = sub.add_parser("audit", help="Run a 360° Q-C-D-R, EVM, HSE, Contracts & Contagion audit")
     p_aud.add_argument("--project-dir", required=True)
     p_aud.add_argument("--as-of")
     p_aud.set_defaults(func=cmd_audit)
@@ -1058,6 +1486,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 if __name__ == "__main__":
+    sys.stdout.reconfigure(encoding="utf-8")
     parser = build_parser()
     ns = parser.parse_args()
     ns.func(ns)

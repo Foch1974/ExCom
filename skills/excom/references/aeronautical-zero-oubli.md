@@ -1,4 +1,4 @@
-# Gate 0, Evidence Bindings, KPI Circuit Breaker, Physical Hooks & Aeronautical « Zero-Amnesia » Protocol (`v3.2`)
+# Gate 0, Evidence Bindings, Post-Milestone Clean-Room Board, Physical Hooks & Aeronautical « Zero-Amnesia » Protocol (`v3.3`)
 
 All CLI commands below use zero external dependencies (`Python 3.8+` stdlib) and render standard **US English (`en-US`)** visual chrome while keeping user-facing rationale strings in the user's language.
 
@@ -170,32 +170,37 @@ python "<skill-dir>/scripts/zero_oubli_runner.py" verify-gate \
   --gate P1
 ```
 
-### D. Record Empirical North-Star KPI Run (`EXCOM_V32_01`)
+### D. Record Empirical North-Star KPI Run / Stage-Gate (`EXCOM_V33_01`)
 ```bash
 python "<skill-dir>/scripts/zero_oubli_runner.py" record-kpi \
   --ledger-dir "<ledger-dir>" \
   --run-id "RUN_04" \
   --lot "Lot 3" \
   --metric-name "Net_Sharpe" \
-  --value 0.211 \
+  --value 0.68 \
   --target 2.0 \
-  --theoretical-ceiling 0.62 \
-  --changes-count 3 \
-  --notes "Third consecutive regression vs champion RUN_01 (0.538)"
+  --clean-room-policy EVERY_MAJOR_MILESTONE \
+  --theoretical-ceiling 0.85 \
+  --changes-count 1 \
+  --notes "Post-backtest empirical run awaiting independent 3-agent Clean-Room Board report"
 ```
-- On `>= 2` consecutive non-improving runs vs champion, sets `clean_room_required = true`, flips `CONTEXT_ANCHOR.md` Effective RAG to **`RED`**, and physically halts further incremental patching until `record-clean-room` certifies a 100%-coverage isolated audit.
+- **Default Policy (`EVERY_MAJOR_MILESTONE`)**: Immediately sets `clean_room_required = true` after **every** major run/stage-gate (threshold = `1`) so an isolated Multi-Agent Clean-Room Board authors the executive report before the builder/PMO can open the next Gate 0. (Lightweight continuous-ops projects may opt into `--clean-room-policy PLATEAU_2`.)
+- On `>= 2` consecutive non-improving runs vs champion, Empirical RAG escalates to **`RED`**.
 
-### E. Certify Isolated Clean-Room Audit (`EXCOM_V32_01`)
+### E. Certify Isolated Multi-Agent Clean-Room Board (`EXCOM_V33_01`)
 ```bash
 python "<skill-dir>/scripts/zero_oubli_runner.py" record-clean-room \
   --ledger-dir "<ledger-dir>" \
   --project-dir "<project-dir>" \
-  --auditor-id "<isolated-subagent-id>" \
+  --auditor-id "clean-room-board-run-04" \
+  --panel-auditors "code_plumbing:sub-1,math_ceiling:sub-2,devil_twins:sub-3" \
   --files-read "<scratch>/files_read.json" \
   --probe-script "<scratch>/clean_room_probe.py" \
   --probe-output "<scratch>/clean_room_probe_out.json" \
-  --theoretical-ceiling 0.62 \
-  --findings-summary "100% file audit completed; uncovered hidden clamps and mock schema drift" \
+  --report-path "<deliverables>/CleanRoom_Board_Report_Run04.md" \
+  --dissenting-vetoes "VETO on premature leverage while core ceiling < target" \
+  --theoretical-ceiling 0.85 \
+  --findings-summary "3-agent Clean-Room Board audited 100% of files and authored Executive Report" \
   --isolated-zero-history
 ```
 

@@ -1,44 +1,48 @@
-# Tier 3 PMO Playbook — Digital Twin & Control Tower (Stage 2 & CoPil)
+# Tier 3 Enterprise PMO Playbook — 360° Q-C-D-R Control Tower & Interchange (`ExCom v3.3`)
 
-The **Project Management Officer (`PMO`)** is invoked at **Stage 2** (after User arbitration at Gate 1) and continuously throughout **Stage 3** to prevent schedule, budget, and cross-perimeter drift.
+The **Project Management Officer (`PMO`)** operates continuously from **Lot 0** through **Handover / Go-Live** to govern **Quality, Cost, Schedule, Risks, HSE/Compliance, and Contracts** without blind spots.
 
-## Core Philosophy of the ExCom v2.0 PMO
+## Core Philosophy of the ExCom v3.3 Enterprise PMO
 
-1. **Zero Re-Litigation**: Execute only the User's locked-in decision.
-2. **Executable Control Tower (Never Static Prose Alone)**: Always initialize and maintain a live Digital Twin using [scripts/excom_engine.py](../scripts/excom_engine.py) (`project-state.json`, `events-bus.jsonl`, `dashboard.html`, and CSV exports in `exports/`).
-3. **Upstream Contagion Enforcement**: Wire `depends_on` and `coupled_seats` on every milestone so a slip, cost overrun, or supplier/tech change in one perimeter wakes affected Directors *before* their workstream starts.
+1. **Right Methodology From Day 1**: Run `excom_engine.py select-methodology` first to lock the exact WBS phases, Stage-Gates, Clean-Room cadence, and modular domain pack (e.g., [domain-packs/corporate-real-estate.md](./domain-packs/corporate-real-estate.md)).
+2. **Executable 360° Control Tower (Never Static Prose Alone)**: Maintain a live Digital Twin via [scripts/excom_engine.py](../scripts/excom_engine.py) (`project-state.json`, `events-bus.jsonl`, `dashboard.html`, MS Project `.xml`, 7-Tab Excel `.xlsx`, Outlook `.ics`, UTF-8-BOM CSVs, and 1-click `CoPil` Brief).
+3. **Separation of Powers at Every Stage-Gate**: At every major empirical run or Stage-Gate, an isolated 3-Agent Clean-Room Board ([clean-room-audit.md](./clean-room-audit.md)) audits 100% of raw deliverables and writes the executive report directly for the Project Director.
 
 ---
 
-## Step 1 — Initialize the Control Tower (`excom_engine.py init`)
+## Step 1 — Select Methodology & Initialize the 360° Control Tower
 
-Choose a clean project directory (e.g., `<workspace>/excom-projects/<project-slug>/`), write an initial `spec.json` with:
-- `project_name`, `locked_decision`, `start_date`, `as_of_date`, `contingency_pct` (`10–20`),
-- `tasks`: list of milestones/workstreams with `id`, `phase`, `name`, `owner_seat`, `depends_on`, `optimistic_days`, `likely_days`, `pessimistic_days`, `planned_budget`, `committed_cost`, `actual_cost`, `progress_pct`, `status`, `hard_gate`, and `coupled_seats` (`{"CFO": "...", "CLO": "..."}`),
-- `recurring_opex`: annual recurring cost items (`name`, `seat`, `annual_eur`),
-- `guardrails`: every Stage-1 `Non-Negotiable Condition` (`seat`, `rule`, `status`),
-- `kill_criteria`: pre-committed objective abort/pivot triggers (`phase`, `owner_seat`, `trigger`, `action`, `status`).
-
-Run:
 ```bash
-python <skill-root>/scripts/excom_engine.py init --project-dir <project-dir> --spec <spec.json>
+# 1. Select optimal methodology & domain pack
+python "<skill-root>/scripts/excom_engine.py" select-methodology \
+  --description "<project description>" --regulatory HIGH --capital HIGH
+
+# 2. Initialize 360° Q-C-D-R Control Tower + auto-generate all corporate exports
+python "<skill-root>/scripts/excom_engine.py" init \
+  --project-dir "<project-dir>" --spec "<spec.json>"
 ```
 
- *(On Antigravity, if the user wants recurring automated monitoring, offer to schedule a weekly `excom_engine.py audit` via `/schedule` or the `schedule` tool.)*
+Core `spec.json` sections supported natively:
+- **Schedule & Hard Target**: `start_date`, `target_end_date` (computes Negative Float!), `tasks` with `depends_on` supporting `FS`, `SS+lag`, `FF`, `SF` (`"M1:SS+15"`), PERT 3-point durations, `hard_gate`, `coupled_seats`.
+- **5-Column Cost & TCO**: `contingency_pct` (`10–15%`), `management_reserve_pct` (`5%`), `tco_horizon_years`, `indexation_annual_pct`, `exit_dilapidation_eur`, `incentives_ti_allowance_eur`, `recurring_opex`, and `change_orders` (`TMA`).
+- **360° Enterprise Registers**: `risk_register` (`EMV` Cost + Delay), `compliance_register` (HSE/ERP/ICPE tests, punch-list reserves, remediation cost/delay, **blocking Go-Live certificates**), `contracts_register` (redlines, HSE clauses, **suspensive conditions** & deadlines), `raci_matrix`, `decision_log`, `guardrails`, `kill_criteria`.
 
 ---
 
-## Step 2 — Deliver the 5-Block Executive Charter + Live Interactive Surfaces
+## Step 2 — Day-to-Day Steering, Registers & Bidirectional Market Interchange
 
-Never leave deliverables behind dead `file:///.../*.html` chat links (which open raw HTML code in editor sidebars instead of rendering the dashboard):
-1. **Real Browser Launch (Local Cockpit)**: Launch `dashboard.html` directly in the user's system browser via command (`Start-Process "<path>/dashboard.html"` on Windows, `open` on macOS, `xdg-open` on Linux) — or render a compact `< 450px` summary widget inline via `<agent-embed>` if requested.
-2. **Cloud Workspace Sync (Google Sheets & Google Docs, when installed)**: When `gsheets` and/or `gdocs` are connected, mirror the 3 operational tables (`1_Gantt_CPM`, `2_Budget_EVM`, `3_Alertes_Contagion`) into a formatted **Google Sheet** and sync executive charters/statutes into a **Google Doc**, surfacing their direct `https://docs.google.com/...` URLs.
-3. **Aeronautical Zero-Amnesia Lock (`Lot 0`)**: Register all approved deliverables and technical tasks into [scripts/zero_oubli_runner.py](../scripts/zero_oubli_runner.py) (`init-lot0`) so every Milestone `M1..Mk` is guarded by a `SHA-256` Gate `P1..Pk`.
+- **Log a Change Order (`TMA`)**: `excom_engine.py add-change-order --project-dir <dir> --title "..." --task-id <tid> --cost-impact 25000 --delay-impact 5 --status APPROVED`
+- **Update Quantified Risk (`EMV`)**: `excom_engine.py upsert-risk --project-dir <dir> --id RSK-01 --category HSE --title "..." --probability 30 --cost-impact 100000 --delay-impact 20`
+- **Track HSE / Compliance / Reserves (`Go-Live Gate`)**: `excom_engine.py upsert-compliance --project-dir <dir> --id HSE-02 --requirement "ERP Safety Commission PV" --standard "ERP" --status WITH_RESERVES --test-completed --reserves "Smoke damper B2" --remediation-cost 18000 --remediation-delay 10`
+- **Track Contract Redlines & Suspensive Clauses**: `excom_engine.py upsert-contract --project-dir <dir> --id CTR-01 --contract-type "Commercial Lease" --counterparty "Landlord" --clause-topic "Art. 606 & DTA" --hse-linked --suspensive --deadline 2026-03-31 --exposure 350000 --status NEGOTIATING`
+- **Import External Updates**: `excom_engine.py import-msproject --project-dir <dir> --file updated.xml` or `import-csv --project-dir <dir> --file tracker.csv`
+- **1-Click Steering Committee (`CoPil`) Brief**: `excom_engine.py export-copil --project-dir <dir>`
 
-Present the concise executive summary in the user's language alongside those live links:
+---
 
-1. **Project Charter & Scope Boundary** (*Definition of Done*, *In-Scope* vs *Out-of-Scope*).
-2. **CPM Critical-Path Schedule & PERT Horizon** (`Baseline` vs `P85` buffered duration, highlighting zero-float Critical Path tasks).
-3. **EVM Budget, OPEX & Bandwidth Envelope** (`BAC` + contingency, annual `OPEX`, weekly founder/team hour cap).
-4. **360° Guardrails, Cross-Perimeter Couplings & Hard Kill Criteria**.
-5. **Immediate Next 3 Actions (24–48h) + Ready Stage-3 Director Workstreams** (offering to dispatch `CLO`, `CFO`, `CPO`/`COO`, `CTO`, etc. immediately to generate the first concrete deliverables).
+## Step 3 — Live Interactive & Corporate Surface Delivery
+
+Never leave deliverables behind dead `file:///.../*.html` chat links:
+1. **Local Multi-View Cockpit**: Launch `dashboard.html` directly in the OS default browser (`Start-Process "<path>/dashboard.html"` on Windows, `open` on macOS, `xdg-open` on Linux).
+2. **Market-Standard Corporate Exports (`exports/`)**: Hand off `control_tower_workbook.xlsx` (`7` Excel sheets), `schedule_msproject.xml` (MS Project / Primavera / Smartsheet / Monday), `milestones_calendar.ics` (Outlook / Google Calendar), and `jira_asana_monday_import.csv` directly to finance, legal, contractors, and internal teams.
+3. **Google Workspace Sync (`gsheets` / `gdocs` / `gslides`, when connected)**: Mirror `exports/` tables into Google Sheets and sync `deliverables/PMO_CoPil_Executive_Brief.md` into Google Docs/Slides with direct clickable `https://docs.google.com/...` links.

@@ -40,7 +40,7 @@ import sys
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 
-ENGINE_VERSION = "3.2.0"
+ENGINE_VERSION = "3.3.0"
 
 FOUNDATIONAL_KINDS: Set[str] = {
     # Software / Quant / Data foundational categories
@@ -123,6 +123,7 @@ def check_clean_room_circuit_breaker(ledger_dir: Optional[Path]) -> Dict[str, An
     kpi = json.loads(kpi_path.read_text(encoding="utf-8"))
     consec = int(kpi.get("consecutive_non_improving_runs", 0))
     flagged = bool(kpi.get("clean_room_required", False))
+    policy = str(kpi.get("clean_room_policy", "EVERY_MAJOR_MILESTONE")).strip().upper()
     runs = kpi.get("runs", [])
     latest_run = runs[-1] if runs else {}
     latest_run_id = str(latest_run.get("run_id", ""))
@@ -131,11 +132,12 @@ def check_clean_room_circuit_breaker(ledger_dir: Optional[Path]) -> Dict[str, An
     latest_val = latest_run.get("value")
     metric_name = str(kpi.get("metric_name", "North-Star KPI"))
 
-    needs_clean_room = flagged or (consec >= 2)
+    needs_clean_room = flagged or (policy == "EVERY_MAJOR_MILESTONE" and bool(latest_run_id)) or (consec >= 2)
     if not needs_clean_room:
         return {
             "blocked": False,
             "status": "CLEAR",
+            "clean_room_policy": policy,
             "consecutive_non_improving_runs": consec,
             "metric_name": metric_name,
             "champion_value": champion_val,
@@ -154,14 +156,25 @@ def check_clean_room_circuit_breaker(ledger_dir: Optional[Path]) -> Dict[str, An
             return {
                 "blocked": False,
                 "status": "CLEAN_ROOM_CERTIFIED",
+                "clean_room_policy": policy,
                 "consecutive_non_improving_runs": consec,
+                "panel_count": int(cr.get("multi_agent_panel_count", 1)),
                 "clean_room_audited_at": cr.get("recorded_at"),
-                "details": f"Clean-Room Audit certified after run `{latest_run_id}` (100% file coverage).",
+                "details": f"Multi-Agent Clean-Room Board certified after run `{latest_run_id}` (100% coverage).",
             }
 
+    trigger_reason = (
+        f"Post-Milestone Separation of Powers (`policy = EVERY_MAJOR_MILESTONE`): run/milestone `{latest_run_id}` "
+        f"on `{metric_name}` (`{latest_val}`, champion `{champion_id}` = `{champion_val}`) has not yet been audited by an "
+        f"isolated Multi-Agent Clean-Room Board"
+        if policy == "EVERY_MAJOR_MILESTONE" and consec < 2
+        else f"Plateau/Regression Circuit Breaker tripped (`{consec}` consecutive non-improving runs on `{metric_name}`: "
+        f"champion `{champion_id}` = `{champion_val}` vs latest `{latest_run_id}` = `{latest_val}`)"
+    )
     return {
         "blocked": True,
         "status": "BLOCKED_CLEAN_ROOM_REQUIRED",
+        "clean_room_policy": policy,
         "consecutive_non_improving_runs": consec,
         "metric_name": metric_name,
         "champion_run_id": champion_id,
@@ -169,10 +182,9 @@ def check_clean_room_circuit_breaker(ledger_dir: Optional[Path]) -> Dict[str, An
         "latest_run_id": latest_run_id,
         "latest_value": latest_val,
         "details": (
-            f"Plateau/Regression Circuit Breaker tripped: `{consec}` consecutive non-improving runs "
-            f"on `{metric_name}` (champion `{champion_id}` = `{champion_val}` vs latest `{latest_run_id}` = `{latest_val}`). "
-            f"Spawn an isolated zero-history Clean-Room auditor reading 100% of production files/deliverables "
-            f"and certify via `zero_oubli_runner.py record-clean-room` before proposing further incremental fixes."
+            f"{trigger_reason}. Spawn an isolated zero-history Multi-Agent Clean-Room Board reading 100% of production "
+            f"files/deliverables to author the independent executive report and certify via `zero_oubli_runner.py record-clean-room` "
+            f"before proposing further changes at Gate 0."
         ),
     }
 

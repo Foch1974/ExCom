@@ -34,7 +34,7 @@ import sys
 from typing import Any, Dict, List, Optional, Set
 
 
-SCHEMA_VERSION = "3.2.0"
+SCHEMA_VERSION = "3.3.0"
 
 SKIP_DIRS: Set[str] = {
     ".git", "node_modules", "__pycache__", ".pytest_cache", ".venv", "venv",
@@ -329,9 +329,17 @@ def worst_rag(a: str, b: str) -> str:
 
 
 def recompute_kpi_summary(kpi: Dict[str, Any]) -> Dict[str, Any]:
-    """Deterministically recomputes champion, non-improving streak, and Clean-Room Circuit Breaker state."""
+    """Deterministically recomputes champion, non-improving streak, and Clean-Room Board gate state.
+
+    Default policy (`EVERY_MAJOR_MILESTONE`): enforces Separation of Powers immediately after EVERY
+    recorded empirical run / stage-gate milestone (threshold = 1) so an isolated Multi-Agent Clean-Room
+    Board authors the executive post-run report before the builder/PMO may open the next Lot.
+    Optional lightweight policy (`PLATEAU_2`): trips only after `>= 2` consecutive non-improving runs.
+    """
     runs = kpi.get("runs", [])
     higher = bool(kpi.get("higher_is_better", True))
+    policy = str(kpi.get("clean_room_policy", "EVERY_MAJOR_MILESTONE")).strip().upper()
+    kpi["clean_room_policy"] = policy
     if not runs:
         kpi["champion_run_id"] = None
         kpi["champion_value"] = None
@@ -363,7 +371,10 @@ def recompute_kpi_summary(kpi: Dict[str, Any]) -> Dict[str, Any]:
 
     latest_id = str(runs[-1]["run_id"])
     last_cr_id = str(kpi.get("last_clean_room_after_run_id", ""))
-    cr_needed = (streak >= 2) and (last_cr_id != latest_id)
+    if policy == "EVERY_MAJOR_MILESTONE":
+        cr_needed = (last_cr_id != latest_id)
+    else:
+        cr_needed = (streak >= 2) and (last_cr_id != latest_id)
 
     kpi["champion_run_id"] = champ_id
     kpi["champion_value"] = champ_val
@@ -371,9 +382,9 @@ def recompute_kpi_summary(kpi: Dict[str, Any]) -> Dict[str, Any]:
     kpi["latest_value"] = float(runs[-1]["value"])
     kpi["consecutive_non_improving_runs"] = streak
     kpi["clean_room_required"] = cr_needed
-    if cr_needed:
+    if streak >= 2 and cr_needed:
         kpi["empirical_rag"] = "RED"
-    elif streak >= 1:
+    elif cr_needed or streak >= 1:
         kpi["empirical_rag"] = "AMBER"
     else:
         kpi["empirical_rag"] = "GREEN"
@@ -413,18 +424,24 @@ def compile_lossless_anchor(ledger_dir: Path, pmo_dir: Optional[Path] = None) ->
         f"- **Cumulative Trials (`N_trials`)** : `{de_store.get('total_trials_count', 0)}` · **Indelible Tests Locked** : `{len(ledger.get('indelible_verified_tests', []))}`",
     ]
 
-    # Section 0: North-Star KPI Trajectory & Clean-Room Circuit Breaker (EXCOM_V32_01)
+    # Section 0: North-Star KPI Trajectory & Independent Clean-Room Review Board (EXCOM_V33_01)
     if kpi and kpi.get("runs"):
         latest_run = kpi["runs"][-1]
         emp_rag = kpi.get("empirical_rag", "GREEN")
         cr_flag = bool(kpi.get("clean_room_required", False))
-        rag_badge = f"{emp_rag} — PLATEAU/REGRESSION CIRCUIT BREAKER ACTIVE (CLEAN-ROOM AUDIT REQUIRED)" if cr_flag else emp_rag
+        cr_pol = kpi.get("clean_room_policy", "EVERY_MAJOR_MILESTONE")
+        if cr_flag and emp_rag == "RED":
+            rag_badge = "RED — PLATEAU/REGRESSION CIRCUIT BREAKER ACTIVE (MULTI-AGENT CLEAN-ROOM BOARD REQUIRED)"
+        elif cr_flag:
+            rag_badge = f"{emp_rag} — POST-MILESTONE MULTI-AGENT CLEAN-ROOM BOARD REQUIRED (Separation of Powers)"
+        else:
+            rag_badge = emp_rag
         lines.extend([
             "",
-            "## 0. North-Star KPI Trajectory & Clean-Room Circuit Breaker",
-            f"- **Empirical RAG** : `{rag_badge}`",
+            "## 0. North-Star KPI Trajectory & Independent Clean-Room Board",
+            f"- **Empirical RAG** : `{rag_badge}` · **Clean-Room Policy** : `{cr_pol}`",
             f"- **North-Star Metric (`{kpi.get('metric_name')}`)** : Target = `{kpi.get('target')}` · Champion = `{kpi.get('champion_value')}` (`{kpi.get('champion_run_id')}`) · Latest = `{kpi.get('latest_value')}` (`{kpi.get('latest_run_id')}`)",
-            f"- **Consecutive Non-Improving Runs** : `{kpi.get('consecutive_non_improving_runs', 0)}` (Breaker threshold: `>= 2`)",
+            f"- **Consecutive Non-Improving Runs** : `{kpi.get('consecutive_non_improving_runs', 0)}`",
         ])
         ceil = latest_run.get("theoretical_ceiling")
         tgt = kpi.get("target")
@@ -437,11 +454,15 @@ def compile_lossless_anchor(ledger_dir: Path, pmo_dir: Optional[Path] = None) ->
                     "Core redesign unlocked; scaling/leverage on current core is BLOCKED."
                 )
         if cr:
+            panel_str = ", ".join(f"{p.get('role')}:{p.get('auditor_id')}" for p in cr.get("panel_auditors", [])) or str(cr.get("auditor_id"))
+            rep_note = f" · Report = `{cr.get('report_path')}`" if cr.get("report_path") else ""
             lines.append(
-                f"- **Last Clean-Room Audit** : `{cr.get('recorded_at')}` · Auditor = `{cr.get('auditor_id')}` · "
+                f"- **Last Clean-Room Board** : `{cr.get('recorded_at')}` · Panel = `{panel_str}` · "
                 f"Coverage = `{cr.get('coverage_pct')}%` (`{cr.get('files_read_count')}/{cr.get('expected_files_count')}` files) · "
-                f"After Run = `{cr.get('audited_after_run_id')}`"
+                f"After Run = `{cr.get('audited_after_run_id')}`{rep_note}"
             )
+            if cr.get("dissenting_vetoes"):
+                lines.append(f"- **Clean-Room Dissenting Vetoes** : `{cr.get('dissenting_vetoes')}`")
 
     # Section 1: Invariants & Stale Profile/Equation Detection (EXCOM_V32_04)
     profile_stale = False
@@ -721,10 +742,13 @@ def cmd_record_kpi(args: argparse.Namespace) -> int:
             "metric_name": args.metric_name,
             "target": float(args.target),
             "higher_is_better": not bool(args.lower_is_better),
+            "clean_room_policy": args.clean_room_policy or "EVERY_MAJOR_MILESTONE",
             "runs": [],
         }
 
     kpi["metric_name"] = args.metric_name or kpi.get("metric_name", "North-Star KPI")
+    if args.clean_room_policy:
+        kpi["clean_room_policy"] = args.clean_room_policy
     if args.target is not None:
         kpi["target"] = float(args.target)
     if args.lower_is_better:
@@ -851,10 +875,26 @@ def cmd_record_clean_room(args: argparse.Namespace) -> int:
         kpi = recompute_kpi_summary(kpi)
         kpi_path.write_text(json.dumps(kpi, ensure_ascii=False, indent=2), encoding="utf-8")
 
+    panel_list: List[Dict[str, str]] = []
+    if args.panel_auditors:
+        for tok in args.panel_auditors.split(","):
+            tok = tok.strip()
+            if not tok:
+                continue
+            if ":" in tok:
+                r_name, a_id = tok.split(":", 1)
+                panel_list.append({"role": r_name.strip(), "auditor_id": a_id.strip()})
+            else:
+                panel_list.append({"role": "auditor", "auditor_id": tok})
+    if not panel_list:
+        panel_list.append({"role": "lead_clean_room_auditor", "auditor_id": args.auditor_id})
+
     report = {
         "schema_version": SCHEMA_VERSION,
         "recorded_at": now_iso(),
         "auditor_id": args.auditor_id,
+        "panel_auditors": panel_list,
+        "multi_agent_panel_count": len(panel_list),
         "isolated_zero_history": True,
         "audited_after_run_id": latest_run_id,
         "tree_sha256": compute_workspace_tree_sha256(project_dir, ledger.get("tracked_files") or None),
@@ -865,6 +905,8 @@ def cmd_record_clean_room(args: argparse.Namespace) -> int:
         "probe_script_path": str(p_script),
         "probe_output_path": str(p_out),
         "probe_output_sha256": file_sha256(p_out),
+        "report_path": args.report_path,
+        "dissenting_vetoes": args.dissenting_vetoes,
         "theoretical_ceiling": float(args.theoretical_ceiling) if args.theoretical_ceiling is not None else None,
         "findings_summary": args.findings_summary,
     }
@@ -995,13 +1037,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_ver.add_argument("--project-dir", default="")
     p_ver.set_defaults(func=cmd_verify_gate)
 
-    p_kpi = sub.add_parser("record-kpi", help="Record empirical North-Star KPI run and update Clean-Room Circuit Breaker")
+    p_kpi = sub.add_parser("record-kpi", help="Record empirical North-Star KPI run / stage-gate and enforce Clean-Room Board")
     p_kpi.add_argument("--ledger-dir", required=True)
     p_kpi.add_argument("--run-id", required=True)
     p_kpi.add_argument("--metric-name", required=True)
     p_kpi.add_argument("--value", type=float, required=True)
     p_kpi.add_argument("--target", type=float, required=True)
     p_kpi.add_argument("--lower-is-better", action="store_true")
+    p_kpi.add_argument("--clean-room-policy", choices=["EVERY_MAJOR_MILESTONE", "PLATEAU_2"], default=None)
     p_kpi.add_argument("--theoretical-ceiling", type=float, default=None)
     p_kpi.add_argument("--lot", default="")
     p_kpi.add_argument("--changes-count", type=int, default=1)
@@ -1009,13 +1052,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_kpi.add_argument("--pmo-dir", default="")
     p_kpi.set_defaults(func=cmd_record_kpi)
 
-    p_cr = sub.add_parser("record-clean-room", help="Certify a 100%-coverage isolated Clean-Room Audit to clear Circuit Breaker")
+    p_cr = sub.add_parser("record-clean-room", help="Certify a 100%-coverage isolated Multi-Agent Clean-Room Board audit")
     p_cr.add_argument("--ledger-dir", required=True)
     p_cr.add_argument("--project-dir", required=True)
     p_cr.add_argument("--auditor-id", required=True)
+    p_cr.add_argument("--panel-auditors", default="", help="Comma-separated role:auditor_id pairs for multi-agent Clean-Room Board")
     p_cr.add_argument("--files-read", required=True, help="Comma-separated paths or JSON file path listing read files")
     p_cr.add_argument("--probe-script", required=True)
     p_cr.add_argument("--probe-output", required=True)
+    p_cr.add_argument("--report-path", default="", help="Optional path to executive Clean-Room report authored for the decision-maker")
+    p_cr.add_argument("--dissenting-vetoes", default="", help="Any unresolved veto raised by a Clean-Room panel member")
     p_cr.add_argument("--findings-summary", required=True)
     p_cr.add_argument("--theoretical-ceiling", type=float, default=None)
     p_cr.add_argument("--isolated-zero-history", action="store_true")
