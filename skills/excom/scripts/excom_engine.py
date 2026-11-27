@@ -44,9 +44,15 @@ from excom_interop import (
     import_tasks_csv,
     select_methodology,
 )
+from excom_office_cad import (
+    audit_dxf_file,
+    export_copil_docx,
+    export_copil_pptx,
+    generate_space_plan_dxf,
+)
 
 
-SCHEMA_VERSION = "3.3.0"
+SCHEMA_VERSION = "3.4.0"
 
 DEFAULT_DOMAIN_COUPLINGS: Dict[str, List[str]] = {
     "COST": ["CFO", "CRO-Risk", "PMO"],
@@ -1032,12 +1038,16 @@ def save_and_refresh(project_dir: Path, state: Dict[str, Any], as_of: Optional[s
     msp_xml = export_msproject_xml(project_dir, state)
     xlsx_wb = export_excel_xlsx(project_dir, state)
     ics_cal = export_icalendar_ics(project_dir, state)
+    pptx_deck = export_copil_pptx(project_dir, state)
+    docx_rep = export_copil_docx(project_dir, state)
     dash = render_dashboard_html(project_dir, state)
     artifacts = {
         "dashboard_html": str(dash),
         "msproject_xml": str(msp_xml),
         "excel_xlsx": str(xlsx_wb),
         "calendar_ics": str(ics_cal),
+        "copil_pptx": str(pptx_deck),
+        "copil_docx": str(docx_rep),
         "exports_dir": str(project_dir / "exports"),
     }
     return dash, new_alerts, artifacts
@@ -1267,7 +1277,35 @@ def cmd_export_copil(args: argparse.Namespace) -> None:
     state = read_json(project_dir / "project-state.json")
     _, _, artifacts = save_and_refresh(project_dir, state, as_of=args.as_of)
     brief = export_copil_brief(project_dir, state)
-    print(json.dumps({"status": "OK", "copil_brief_md": str(brief), "artifacts": artifacts}, ensure_ascii=False, indent=2))
+    print(json.dumps({
+        "status": "OK",
+        "copil_brief_md": str(brief),
+        "copil_deck_pptx": artifacts["copil_pptx"],
+        "copil_report_docx": artifacts["copil_docx"],
+        "artifacts": artifacts,
+    }, ensure_ascii=False, indent=2))
+
+
+def cmd_generate_space_plan(args: argparse.Namespace) -> None:
+    project_dir = Path(args.project_dir).resolve()
+    project_dir.mkdir(parents=True, exist_ok=True)
+    if args.spec:
+        spec = read_json(Path(args.spec).resolve())
+    elif (project_dir / "project-state.json").is_file():
+        st = read_json(project_dir / "project-state.json")
+        spec = st.get("space_plan", {"title": f"{st.get('project_name', 'Floorplate')} — Space Plan"})
+    else:
+        spec = {"title": "Corporate Floorplate — Macro & Micro-Zoning"}
+    res = generate_space_plan_dxf(project_dir, spec)
+    print(json.dumps({"status": "OK", **res}, ensure_ascii=False, indent=2))
+
+
+def cmd_audit_dxf(args: argparse.Namespace) -> None:
+    dxf_path = Path(args.file).resolve()
+    if not dxf_path.is_file():
+        sys.exit(f"Error: DXF file not found: {dxf_path}")
+    res = audit_dxf_file(dxf_path)
+    print(json.dumps({"status": "OK", **res}, ensure_ascii=False, indent=2))
 
 
 def cmd_emit_signal(args: argparse.Namespace) -> None:
@@ -1444,10 +1482,19 @@ def build_parser() -> argparse.ArgumentParser:
     p_imp_csv.add_argument("--file", required=True)
     p_imp_csv.set_defaults(func=cmd_import_external)
 
-    p_copil = sub.add_parser("export-copil", help="Generate 1-click Steering Committee (CoPil) Executive Brief")
+    p_copil = sub.add_parser("export-copil", help="Generate 1-click CoPil Executive Pack (PowerPoint .pptx + Word .docx + Markdown)")
     p_copil.add_argument("--project-dir", required=True)
     p_copil.add_argument("--as-of", default=None)
     p_copil.set_defaults(func=cmd_export_copil)
+
+    p_sp = sub.add_parser("generate-space-plan", help="Generate parametric AutoCAD .dxf (Macro + Micro-Zoning), scaled .svg & Workplace Audit JSON")
+    p_sp.add_argument("--project-dir", required=True)
+    p_sp.add_argument("--spec", default="", help="Optional JSON floorplan specification (dimensions, zones, desk specs)")
+    p_sp.set_defaults(func=cmd_generate_space_plan)
+
+    p_adxf = sub.add_parser("audit-dxf", help="Audit layers, bounding box, and closed-polygon m2 areas in any ASCII AutoCAD .dxf file")
+    p_adxf.add_argument("--file", required=True)
+    p_adxf.set_defaults(func=cmd_audit_dxf)
 
     p_sig = sub.add_parser("emit-signal", help="Emit an upstream cross-director drift/discovery signal")
     p_sig.add_argument("--project-dir", required=True)

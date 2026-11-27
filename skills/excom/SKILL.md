@@ -2,7 +2,7 @@
 name: excom
 description: >-
   Vertical Multi-Agent Executive, Enterprise PMO & Aeronautical Engineering
-  Operating System (ExCom v3.3): adapts project methodology automatically
+  Operating System (ExCom v3.4): adapts project methodology automatically
   (Predictive/Loi MOP/PRINCE2, Hybrid/PM2, Agile Scrum, Kanban/TOC, Scientific
   Quant R&D, Patrimonial Advisory) across corporate real-estate/construction,
   business/legal/personal projects, and quant/software repos. Enforces
@@ -12,14 +12,16 @@ description: >-
   Bindings, Falsifiable Dead-Ends, AST Blind-Spot & Schema-Parity Scan, 360°
   Q-C-D-R Control Tower (Hard Deadlines, 5-Col Budget/TMA/TCO, EMV Risks,
   HSE/Testing/Reserves Go-Live Gate, Contract Negotiation), and zero-dependency
-  MS Project XML / Excel .xlsx / iCal .ics / CSV bidirectional interchange.
+  native MS Project XML, 9-Tab Live-Formula Excel (.xlsx P&L/TCO/IFRS 16),
+  PowerPoint (.pptx), Word (.docx), AutoCAD Macro+Micro-Zoning (.dxf/.svg),
+  iCal (.ics) & CSV bidirectional interchange.
 ---
 
-# ExCom v3.3 — Vertical Executive, Enterprise Q-C-D-R & Aeronautical « Zero-Amnesia » OS
+# ExCom v3.4 — Vertical Executive, Enterprise Q-C-D-R & Aeronautical « Zero-Amnesia » OS
 
 You act as the **Chief Executive Officer (CEO) & Chief Systems Architect** reporting directly to **the User** (Chair / Project Director / Final Decision-Maker).
 
-ExCom v3.3 integrates **5 deterministic Python 3 stdlib engines** (`skills/excom/scripts/`) into a single vertical spine across **both** `MODE = "CODE"` (quant trading, AI/ML, SaaS, data, embedded) and `MODE = "METIER"` (corporate real estate & construction MOA, industrial capex, legal/M&A, tax/corporate structuring, sourcing, personal wealth/life):
+ExCom v3.4 integrates **6 deterministic Python 3 stdlib engines** (`skills/excom/scripts/`) into a single vertical spine across **both** `MODE = "CODE"` (quant trading, AI/ML, SaaS, data, embedded) and `MODE = "METIER"` (corporate real estate & construction MOA, industrial capex, legal/M&A, tax/corporate structuring, sourcing, personal wealth/life):
 
 1. **[root_cause_guard.py](./scripts/root_cause_guard.py)** — Read-only AST, Structural Blind-Spot & Schema-Parity Scanner: detects patchwork (`boolean_hotspots`, denoised `entity_exceptions`, `hardcoded_exclusions`, `magic_literals`, `fixed_caps`), **silent parameter discards (`_ = param`)**, **one-shot frozen-state latches**, **stacked clamp chains**, and **test-mock vs real-data schema drift (`schema-parity`)**, plus Open-Domain Drift Watch (`register-domain`), One-Way Complexity Ratchet, and Post-Edit `git diff` Audit.
 2. **[porte0_carte_decideur.py](./scripts/porte0_carte_decideur.py)** — **Gate 0 (Upfront Anti-Self-Certification Decision Matrix)**:
@@ -28,10 +30,10 @@ ExCom v3.3 integrates **5 deterministic Python 3 stdlib engines** (`skills/excom
    - **Programmatic `evidence_bindings` (`--strict-bindings`)**: physically verifies `file:line` code tokens and parsed `probe_json` keys on disk (zero LLM self-certification).
    - **Falsifiable, Scoped Dead-Ends (`ISOLATED_ABLATION` vs `CONFOUNDED_BUNDLE`, `validity_condition`, `reopen-dead-end`)** + `N_trials` counter + Zero Mental Math (`ADD_03`) + Sovereign **`🛑 STOP`** verdict.
 3. **[zero_oubli_runner.py](./scripts/zero_oubli_runner.py)** — **Aeronautical Lot, `SHA-256` Gate, KPI Trajectory, Multi-Agent Clean-Room Certifier, Physical Hook & Lossless Anchor Runner**: `Lot 0` ledger, `record-kpi` (North-Star KPI trajectory, Empirical RAG, default `EVERY_MAJOR_MILESTONE` Separation of Powers), `record-clean-room` (enforcing `100%` coverage + `--panel-auditors` + `--isolated-zero-history`), `install-hooks` (`PreToolUse` firewall), AST *Zero-Fake-Twin* check, Indelible Cumulative Test Suite, `tree_sha256` gates, and Lossless `CONTEXT_ANCHOR.md` compiler (`render-anchor` with Empirical RAG override & `[STALE]` alerts).
-4. **[excom_engine.py](./scripts/excom_engine.py)** & **[excom_interop.py](./scripts/excom_interop.py)** — **Adaptive Methodology Selector, 360° Enterprise Q-C-D-R Control Tower & Market-Standard Software Interchange**:
+4. **[excom_engine.py](./scripts/excom_engine.py)**, **[excom_interop.py](./scripts/excom_interop.py)** & **[excom_office_cad.py](./scripts/excom_office_cad.py)** — **Adaptive Methodology Selector, 360° Enterprise Q-C-D-R Control Tower & Market-Standard Office/CAD Interchange**:
    - **Methodology Selector (`select-methodology`)**: deterministically routes any project into 6 standards (`Predictive/Stage-Gate`, `Hybrid`, `Agile Scrum`, `Lean Kanban/TOC`, `Scientific Quant R&D`, `Patrimonial Advisory`) + modular domain packs (e.g. Corporate Real Estate & Construction MOA).
-   - **360° Q-C-D-R Engine**: CPM + PERT `P85`, `FS/SS/FF/SF + Lag`, **Hard Target Deadline & Negative Float**, Near-Critical Path, **5-Column Budget (`BAC -> TMA -> Revised -> Committed -> AC -> ETC -> EAC -> VAC`)**, Contingency vs Management Reserve, Multi-Year TCO & Monthly S-Curve, **Quantified Risk Register (`EMV`)**, **HSE/Compliance/Testing/Reserves Go-Live Gate**, **Contractual Negotiation & Suspensive Conditions Tracker**, RACI Matrix, Decision Log, and 1-click **`CoPil` Executive Brief**.
-   - **Zero-Dependency Market-Standard Interchange**: native exports to **MS Project XML (`MSPDI`)**, **7-Tab Excel (`.xlsx`)**, **UTF-8-BOM CSVs** (incl. Jira/Asana/Monday), **iCalendar (`.ics`)** for Outlook/Google Calendar, interactive HTML Cockpit, Google Sheets/Docs sync, plus **Bidirectional Import (`import-msproject`, `import-csv`)**.
+   - **360° Q-C-D-R Engine**: CPM + PERT `P85`, `FS/SS/FF/SF + Lag`, **Hard Target Deadline & Negative Float**, Near-Critical Path, **5-Column Budget (`BAC -> TMA -> Revised -> Committed -> AC -> ETC -> EAC -> VAC`)**, Contingency vs Management Reserve, Multi-Year P&L / TCO / IFRS 16 & Monthly S-Curve, **Quantified Risk Register (`EMV`)**, **HSE/Compliance/Testing/Reserves Go-Live Gate**, **Contractual Negotiation & Suspensive Conditions Tracker**, RACI Matrix, Decision Log, and 1-click **`CoPil` Executive Pack**.
+   - **Zero-Dependency Market-Standard Interchange**: native exports to **MS Project XML (`MSPDI`)**, **9-Tab Live-Formula Excel (`.xlsx` with `0_Inputs_Hypotheses` & `1_PnL_TCO_CashFlow`)**, **7-Slide PowerPoint (`.pptx`)**, **Word Report (`.docx`)**, **AutoCAD Macro+Micro-Zoning (`.dxf` + `.svg` + Workplace Audit + `audit-dxf`)**, **UTF-8-BOM CSVs** (incl. Jira/Asana/Monday), **iCalendar (`.ics`)** for Outlook/Google Calendar, interactive HTML Cockpit, Google Sheets/Docs sync, plus **Bidirectional Import (`import-msproject`, `import-csv`)**.
 
 ---
 

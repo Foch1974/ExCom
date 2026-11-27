@@ -475,6 +475,10 @@ def write_xlsx_workbook(out_path: Path, sheets: List[Tuple[str, List[List[Any]]]
                 if isinstance(val, bool):
                     s_i = get_ss_idx("YES" if val else "NO")
                     cells_xml.append(f'<c r="{ref}" t="s" s="{style_id}"><v>{s_i}</v></c>')
+                elif isinstance(val, str) and val.startswith("=") and r_idx > 1:
+                    # Live dynamic Excel OOXML formula cell (escape &, <, > only; keep literal quotes for Excel sheet refs)
+                    f_esc = val[1:].replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                    cells_xml.append(f'<c r="{ref}" s="0"><f>{f_esc}</f></c>')
                 elif isinstance(val, (int, float)) and r_idx > 1:
                     cells_xml.append(f'<c r="{ref}" s="0"><v>{val}</v></c>')
                 else:
@@ -588,35 +592,106 @@ def write_xlsx_workbook(out_path: Path, sheets: List[Tuple[str, List[List[Any]]]
 
 
 def export_excel_xlsx(project_dir: Path, state: Dict[str, Any]) -> Path:
-    """Exports the 7-sheet Executive Control Tower .xlsx workbook."""
+    """Exports the 9-sheet Executive Control Tower .xlsx workbook WITH LIVE DYNAMIC EXCEL FORMULAS
+    (Parametric Inputs + Multi-Year P&L / TCO / Cash-Flow + 5-Col Budget + EMV Risks + HSE + Contracts)."""
     m = state.get("metrics", {})
     evm = m.get("evm", {})
     qcdr = m.get("qcdr", {})
     ccy = state.get("currency", "EUR")
+    tasks = state.get("tasks", [])
+    n_tasks = len(tasks)
+    bud_last_row = n_tasks + 1
+    bud_tot_row = n_tasks + 2
 
-    # Sheet 1: 0_Executive_Summary
+    # Sheet 1: 0_Inputs_Hypotheses (Editable Blue-Input Parametric Driver Sheet for Corporate Confidential Plug-In)
+    area_m2 = float(state.get("floor_area_m2", 2500.0))
+    annual_opex_tot = float(evm.get("recurring_annual_opex_eur", 0.0))
+    rent_per_m2 = round((annual_opex_tot * 0.85) / max(1.0, area_m2), 2) if annual_opex_tot > 0 else 320.0
+    charges_per_m2 = round((annual_opex_tot * 0.15) / max(1.0, area_m2), 2) if annual_opex_tot > 0 else 65.0
+    capex_per_m2 = round(float(evm.get("bac_eur", 0.0)) / max(1.0, area_m2), 2) if float(evm.get("bac_eur", 0.0)) > 0 else 650.0
+    tco_yrs = int(state.get("tco_horizon_years", 6))
+    s_inputs: List[List[Any]] = [
+        ["Input_Parameter", "Value", "Unit", "Usage_Note_Edit_Internally_In_Excel"],
+        ["Floor_Area_Or_Scale_Units", area_m2, "m2", "Overwrite with confidential real surface area locally"],
+        ["Annual_Headline_Rent_Per_Unit", rent_per_m2, f"{ccy}/m2/yr", "Drives dynamic Multi-Year P&L Rent line"],
+        ["Annual_Charges_Maint_Per_Unit", charges_per_m2, f"{ccy}/m2/yr", "Service charges, taxes, utilities & maintenance"],
+        ["FitOut_Capex_Per_Unit", capex_per_m2, f"{ccy}/m2", "Reference unit CAPEX benchmark"],
+        ["Contingency_Pct", float(state.get("contingency_pct", 12.0)) / 100.0, "ratio", "Project Director contingency reserve rate"],
+        ["Management_Reserve_Pct", float(state.get("management_reserve_pct", 5.0)) / 100.0, "ratio", "ComEx management reserve rate"],
+        ["Annual_Indexation_ILAT_BT01", float(state.get("indexation_annual_pct", 2.0)) / 100.0, "ratio", "Annual compounding indexation on OPEX/Rent"],
+        ["Rent_Free_Months_Year1", float(state.get("rent_free_months", 6.0)), "months", "Landlord commercial rent-free abatement in Year 1"],
+        ["Landlord_TI_Allowance_Incentive", float(state.get("incentives_ti_allowance_eur", 0.0)), ccy, "Cash contribution from landlord / grant"],
+        ["Old_Site_Exit_Dilapidations", float(state.get("exit_dilapidation_eur", 0.0)), ccy, "Reinstatement & moving exit cost"],
+        ["Capex_Depreciation_Years", float(state.get("depreciation_years", 9.0)), "years", "Straight-line P&L amortization period"],
+        ["IFRS16_Discount_Rate", float(state.get("ifrs16_discount_rate_pct", 4.5)) / 100.0, "ratio", "Incremental borrowing rate for lease PV"],
+        ["TCO_Horizon_Years", tco_yrs, "years", "Multi-year P&L & TCO evaluation horizon"],
+    ]
+
+    # Sheet 2: 1_PnL_TCO_CashFlow (100% Live Excel Formulas Linked to 0_Inputs_Hypotheses & 3_Budget_5Col_EVM!)
+    yrs = list(range(1, max(6, min(12, tco_yrs)) + 1))
+    s_pnl: List[List[Any]] = [["PnL_And_CashFlow_Line", *[f"Year_{y}" for y in yrs], "Total_Horizon"]]
+    end_col = _col_letter(len(yrs) + 1)
+
+    rent_row: List[Any] = [f"Headline Rent ({ccy})"]
+    rf_row: List[Any] = [f"Less: Rent-Free Abatement ({ccy})"]
+    chg_row: List[Any] = [f"Service Charges, Taxes & Maint ({ccy})"]
+    dep_row: List[Any] = [f"CAPEX Amortization / Depreciation ({ccy})"]
+    pnl_tot_row: List[Any] = [f"TOTAL ANNUAL P&L IMPACT ({ccy})"]
+    capex_cf_row: List[Any] = [f"CAPEX Cash Outflow Net of TI ({ccy})"]
+    exit_cf_row: List[Any] = [f"Exit / Dilapidation Cash Outflow ({ccy})"]
+    net_cf_row: List[Any] = [f"NET ANNUAL CASH OUTFLOW ({ccy})"]
+    pv_lease_row: List[Any] = [f"Discounted Lease PV (IFRS 16 Proxy, {ccy})"]
+
+    for idx_y, y in enumerate(yrs):
+        col = _col_letter(idx_y + 2)
+        pow_exp = y - 1
+        rent_row.append(f"='0_Inputs_Hypotheses'!$B$2*'0_Inputs_Hypotheses'!$B$3*((1+'0_Inputs_Hypotheses'!$B$8)^{pow_exp})")
+        rf_row.append(f"=-'0_Inputs_Hypotheses'!$B$2*'0_Inputs_Hypotheses'!$B$3*('0_Inputs_Hypotheses'!$B$9/12)" if y == 1 else 0.0)
+        chg_row.append(f"='0_Inputs_Hypotheses'!$B$2*'0_Inputs_Hypotheses'!$B$4*((1+'0_Inputs_Hypotheses'!$B$8)^{pow_exp})")
+        dep_row.append(f"='3_Budget_5Col_EVM'!$J${bud_tot_row}/'0_Inputs_Hypotheses'!$B$12")
+        pnl_tot_row.append(f"={col}2+{col}3+{col}4+{col}5")
+        capex_cf_row.append(f"='3_Budget_5Col_EVM'!$J${bud_tot_row}-'0_Inputs_Hypotheses'!$B$10" if y == 1 else 0.0)
+        exit_cf_row.append("='0_Inputs_Hypotheses'!$B$11" if y == 1 else 0.0)
+        net_cf_row.append(f"={col}2+{col}3+{col}4+{col}7+{col}8")
+        pv_lease_row.append(f"=({col}2+{col}3)/((1+'0_Inputs_Hypotheses'!$B$13)^{y})")
+
+    for r_idx_f, r_arr in enumerate([rent_row, rf_row, chg_row, dep_row, pnl_tot_row, capex_cf_row, exit_cf_row, net_cf_row, pv_lease_row], start=2):
+        r_arr.append(f"=SUM(B{r_idx_f}:{end_col}{r_idx_f})")
+        s_pnl.append(r_arr)
+
+    # Append Monthly CAPEX Cash-Flow S-Curve below P&L
+    s_pnl.append(["", "", "", "", "", "", "", ""])
+    s_pnl.append(["Monthly_CAPEX_CashFlow_S_Curve", "Planned_Month_Outflow", "Cumulative_Outflow", "", "", "", "", ""])
+    s_curve = m.get("monthly_cashflow_s_curve", {})
+    base_sc_row = len(s_pnl) + 1
+    for i_m, (ym, amt) in enumerate(s_curve.items()):
+        r_now = base_sc_row + i_m
+        cum_f = f"=B{r_now}" if i_m == 0 else f"=C{r_now - 1}+B{r_now}"
+        s_pnl.append([ym, amt, cum_f])
+
+    # Sheet 3: 0_Executive_Summary (Live links to Budget/PnL/Risks!)
     s0: List[List[Any]] = [
         ["KPI / Control Dimension", "Current Value", "Target / Baseline", "Status / Notes"],
         ["Project Name", state.get("project_name", ""), state.get("methodology_id", "PREDICTIVE_STAGE_GATE"), state.get("overall_rag", "GREEN")],
         ["As-Of Date", m.get("as_of_date", ""), f"Start: {state.get('start_date', '')}", f"Overall Progress: {m.get('overall_progress_pct', 0)}%"],
-        ["Forecast Completion Date", m.get("forecast_end_date", ""), f"Hard Target: {m.get('target_end_date') or 'N/A'}", f"Target Margin/Slack: {m.get('target_margin_days', 'N/A')} d (P85: {m.get('p85_duration_days', 0)} d)"],
+        ["Forecast Completion Date", m.get("forecast_end_date", ""), f"Hard Target: {m.get('target_end_date') or 'N/A'}", f"Target Slack: {m.get('target_margin_days', 'N/A')} d (P85: {m.get('p85_duration_days', 0)} d)"],
         ["Critical Path", " -> ".join(m.get("critical_path", [])), f"Near-Critical (<=5d): {', '.join(m.get('near_critical_tasks', [])) or 'None'}", f"Project Slip: {m.get('project_slip_days', 0)} d"],
-        [f"Initial Baseline Budget (BAC, {ccy})", evm.get("bac_eur", 0), f"Approved Changes/TMA: {evm.get('approved_changes_eur', 0)}", f"Revised Budget: {evm.get('revised_budget_eur', 0)}"],
-        [f"Committed / Actual Spend ({ccy})", evm.get("committed_eur", 0), f"Actual (AC): {evm.get('ac_eur', 0)}", f"Remaining (ETC): {evm.get('etc_eur', 0)}"],
-        [f"Forecast Landing (EAC, {ccy})", evm.get("eac_eur", 0), f"Variance vs Revised (VAC): {evm.get('vac_eur', 0)}", f"CPI: {evm.get('cpi', 1.0)} | SPI: {evm.get('spi', 1.0)}"],
-        [f"Contingency Remaining ({ccy})", evm.get("contingency_remaining_eur", 0), f"Initial Contingency: {evm.get('contingency_eur', 0)}", f"Management Reserve: {evm.get('management_reserve_eur', 0)}"],
+        [f"Initial Baseline Budget (BAC, {ccy})", f"='3_Budget_5Col_EVM'!D{bud_tot_row}", f"='3_Budget_5Col_EVM'!E{bud_tot_row}", "Live formula from 3_Budget_5Col_EVM (Col D=BAC, E=Approved TMA)"],
+        [f"Revised Budget / EAC Landing ({ccy})", f"='3_Budget_5Col_EVM'!F{bud_tot_row}", f"='3_Budget_5Col_EVM'!J{bud_tot_row}", f"CPI: {evm.get('cpi', 1.0)} | SPI: {evm.get('spi', 1.0)}"],
+        [f"Budget Variance (VAC, {ccy})", f"='3_Budget_5Col_EVM'!K{bud_tot_row}", f"Contingency: {evm.get('contingency_remaining_eur', 0):,.0f}", f"Mgmt Reserve: {evm.get('management_reserve_eur', 0):,.0f}"],
+        [f"Multi-Year Total Cash TCO / IFRS16 PV ({ccy})", f"='1_PnL_TCO_CashFlow'!{_col_letter(len(yrs) + 2)}9", f"='1_PnL_TCO_CashFlow'!{_col_letter(len(yrs) + 2)}10", "Col B = Total Cash TCO, Col C = IFRS 16 Lease PV (live formulas from 0_Inputs_Hypotheses)"],
         [f"Total Risk Exposure EMV ({ccy})", qcdr.get("risk_emv_eur", 0), f"Expected Risk Delay: {qcdr.get('risk_expected_delay_days', 0)} d", f"High/Critical Risks: {qcdr.get('critical_risks_count', 0)}"],
-        ["HSE / Compliance Go-Live Gate", qcdr.get("go_live_gate_status", "READY"), f"Certificates Issued: {qcdr.get('certificates_pct', 100)}%", f"Blocking Items Open: {qcdr.get('blocking_compliance_open', 0)} | Open Reserves: {qcdr.get('open_reserves_count', 0)}"],
+        ["HSE / Compliance Go-Live Gate", qcdr.get("go_live_gate_status", "READY"), f"Certificates Issued: {qcdr.get('certificates_pct', 100)}%", f"Blockers: {qcdr.get('blocking_compliance_open', 0)} | Open Reserves: {qcdr.get('open_reserves_count', 0)}"],
         ["Contracts & Suspensive Clauses", f"Signed: {qcdr.get('contracts_signed_count', 0)}", f"Open Redlines: {qcdr.get('contracts_open_redlines', 0)}", f"Open Suspensive Conditions: {qcdr.get('open_suspensive_conditions', 0)}"],
     ]
 
-    # Sheet 2: 1_Schedule_CPM
+    # Sheet 4: 2_Schedule_CPM
     s1: List[List[Any]] = [[
         "Task_ID", "WBS", "Phase", "Name", "Owner", "Status", "Progress_Pct", "Depends_On",
         "Baseline_Days", "Forecast_Days", "Planned_Start", "Planned_End", "Forecast_Start",
         "Forecast_End", "Total_Float_Days", "Target_Slack_Days", "Critical", "Near_Critical", "Hard_Gate",
     ]]
-    for idx, t in enumerate(state.get("tasks", []), start=1):
+    for idx, t in enumerate(tasks, start=1):
         c = t.get("computed", {})
         deps = "; ".join(dep if isinstance(dep, str) else f"{dep.get('id')}:{dep.get('type','FS')}" for dep in t.get("depends_on", []))
         s1.append([
@@ -628,44 +703,53 @@ def export_excel_xlsx(project_dir: Path, state: Dict[str, Any]) -> Path:
             bool(c.get("is_critical")), bool(c.get("is_near_critical")), t.get("hard_gate", ""),
         ])
 
-    # Sheet 3: 2_Budget_5Col_EVM
+    # Sheet 5: 3_Budget_5Col_EVM (LIVE EXCEL FORMULAS ON EVERY ROW + SUM ROLLUP!)
     s2: List[List[Any]] = [[
         "Task_ID", "Workstream", "Owner", f"Initial_BAC_{ccy}", f"Approved_Changes_{ccy}",
         f"Revised_Budget_{ccy}", f"Committed_{ccy}", f"Actual_AC_{ccy}",
         f"Remaining_ETC_{ccy}", f"Forecast_EAC_{ccy}", f"Variance_VAC_{ccy}",
     ]]
-    for t in state.get("tasks", []):
+    for idx, t in enumerate(tasks, start=2):
         c = t.get("computed", {})
         s2.append([
             t["id"], t["name"], t.get("owner_seat", ""),
-            float(t.get("planned_budget", 0)), float(c.get("approved_changes_eur", 0)),
-            float(c.get("revised_budget", 0)), float(c.get("committed_cost", 0)),
-            float(t.get("actual_cost", 0)), float(c.get("etc_eur", 0)),
-            float(c.get("task_eac_eur", 0)), float(c.get("task_vac_eur", 0)),
+            float(t.get("planned_budget", 0)),
+            float(c.get("approved_changes_eur", 0)),
+            f"=D{idx}+E{idx}",            # Revised = Initial BAC + Approved Changes
+            float(c.get("committed_cost", 0)),
+            float(t.get("actual_cost", 0)),
+            float(c.get("etc_eur", 0)),
+            f"=H{idx}+I{idx}",            # EAC = Actual AC + Remaining ETC
+            f"=F{idx}-J{idx}",            # VAC = Revised - EAC
         ])
-    s2.append([
-        "TOTAL", "PROJECT CAPEX ROLLUP", "CFO",
-        evm.get("bac_eur", 0), evm.get("approved_changes_eur", 0),
-        evm.get("revised_budget_eur", 0), evm.get("committed_eur", 0),
-        evm.get("ac_eur", 0), evm.get("etc_eur", 0), evm.get("eac_eur", 0), evm.get("vac_eur", 0),
-    ])
+    if n_tasks > 0:
+        s2.append([
+            "TOTAL", "PROJECT CAPEX ROLLUP", "CFO",
+            f"=SUM(D2:D{bud_last_row})", f"=SUM(E2:E{bud_last_row})", f"=SUM(F2:F{bud_last_row})",
+            f"=SUM(G2:G{bud_last_row})", f"=SUM(H2:H{bud_last_row})", f"=SUM(I2:I{bud_last_row})",
+            f"=SUM(J2:J{bud_last_row})", f"=SUM(K2:K{bud_last_row})",
+        ])
+    else:
+        s2.append(["TOTAL", "PROJECT CAPEX ROLLUP", "CFO", 0, 0, 0, 0, 0, 0, 0, 0])
 
-    # Sheet 4: 3_Risk_Register
+    # Sheet 6: 4_Risk_Register (LIVE EMV FORMULAS!)
+    risks = state.get("risk_register", [])
     s3: List[List[Any]] = [[
         "Risk_ID", "Category", "Title", "Owner", "Status", "Probability_Pct",
         f"Cost_Impact_{ccy}", "Delay_Impact_Days", f"EMV_{ccy}", "Expected_Delay_Days", "Mitigation_Plan",
     ]]
-    for r in state.get("risk_register", []):
-        p = float(r.get("probability_pct", 0.0))
-        ci = float(r.get("cost_impact_eur", 0.0))
-        di = float(r.get("delay_impact_days", 0.0))
+    for idx, r in enumerate(risks, start=2):
         s3.append([
             r.get("id", ""), r.get("category", ""), r.get("title", ""), r.get("owner_seat", "CRO-Risk"),
-            r.get("status", "OPEN"), p, ci, di, round((p / 100.0) * ci, 2), round((p / 100.0) * di, 1),
-            r.get("mitigation", ""),
+            r.get("status", "OPEN"), float(r.get("probability_pct", 0.0)),
+            float(r.get("cost_impact_eur", 0.0)), float(r.get("delay_impact_days", 0.0)),
+            f"=(F{idx}/100)*G{idx}", f"=(F{idx}/100)*H{idx}", r.get("mitigation", ""),
         ])
+    if risks:
+        r_last = len(risks) + 1
+        s3.append(["TOTAL", "EXPOSURE", "TOTAL QUANTIFIED RISK EMV", "CRO-Risk", "OPEN", "", f"=SUM(G2:G{r_last})", f"=SUM(H2:H{r_last})", f"=SUM(I2:I{r_last})", f"=SUM(J2:J{r_last})", ""])
 
-    # Sheet 5: 4_Compliance_HSE_Snags
+    # Sheet 7: 5_Compliance_HSE_Snags
     s4: List[List[Any]] = [[
         "Item_ID", "Domain", "Asset_Or_Requirement", "Regulation_Standard", "Compliance_Status",
         "Test_Required", "Test_Completed", "Test_Date", "Reserves_Or_Snags", "Remediation_Task_ID",
@@ -683,7 +767,7 @@ def export_excel_xlsx(project_dir: Path, state: Dict[str, Any]) -> Path:
             bool(item.get("blocking_go_live", True)), item.get("owner_seat", "CCO-Compliance"),
         ])
 
-    # Sheet 6: 5_Contracts_Negotiation
+    # Sheet 8: 6_Contracts_Negotiation
     s5: List[List[Any]] = [[
         "Contract_ID", "Contract_Type", "Counterparty", "Clause_Topic", "Target_Position",
         "Counterparty_Position", "HSE_Compliance_Clause", "Suspensive_Condition",
@@ -699,7 +783,7 @@ def export_excel_xlsx(project_dir: Path, state: Dict[str, Any]) -> Path:
             ct.get("owner_seat", "CLO"),
         ])
 
-    # Sheet 7: 6_Changes_Decisions_RACI
+    # Sheet 9: 7_Changes_Decisions_RACI
     s6: List[List[Any]] = [["Record_Type", "ID", "Date", "Title_Or_Workstream", "Owner_R", "Accountable_A", "Consulted_C", "Informed_I", f"Cost_Impact_{ccy}", "Delay_Days", "Status"]]
     for co in state.get("change_orders", []):
         s6.append([
@@ -720,13 +804,15 @@ def export_excel_xlsx(project_dir: Path, state: Dict[str, Any]) -> Path:
 
     out_path = project_dir / "exports" / "control_tower_workbook.xlsx"
     return write_xlsx_workbook(out_path, [
+        ("0_Inputs_Hypotheses", s_inputs),
+        ("1_PnL_TCO_CashFlow", s_pnl),
         ("0_Executive_Summary", s0),
-        ("1_Schedule_CPM", s1),
-        ("2_Budget_5Col_EVM", s2),
-        ("3_Risk_Register", s3),
-        ("4_Compliance_HSE_Snags", s4),
-        ("5_Contracts_Negotiation", s5),
-        ("6_Changes_Decisions_RACI", s6),
+        ("2_Schedule_CPM", s1),
+        ("3_Budget_5Col_EVM", s2),
+        ("4_Risk_Register", s3),
+        ("5_Compliance_HSE_Snags", s4),
+        ("6_Contracts_Negotiation", s5),
+        ("7_Changes_Decisions_RACI", s6),
     ])
 
 

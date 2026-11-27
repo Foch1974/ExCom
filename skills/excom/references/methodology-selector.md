@@ -42,7 +42,10 @@ Every `excom_engine.py init`, `update-task`, `audit`, or register update automat
 | File Generated | Format Standard | Corporate Tools Directly Compatible (No API / No IT Friction) |
 | :--- | :--- | :--- |
 | **`exports/schedule_msproject.xml`** | Microsoft Project Data Interchange (`MSPDI`) | **Microsoft Project**, **Primavera P6**, **Smartsheet**, **ProjectLibre**, **GanttProject**, **Monday.com**, **Wrike** |
-| **`exports/control_tower_workbook.xlsx`** | Native 7-Sheet OOXML Excel Workbook (`.xlsx`) | **Microsoft Excel**, **Google Sheets**, **LibreOffice Calc**, **Power BI**, **CFO / Finance Controllers** |
+| **`exports/control_tower_workbook.xlsx`** | Native **9-Sheet Live-Formula** Excel Workbook (`.xlsx`) | **Microsoft Excel**, **Google Sheets**, **LibreOffice Calc**, **Power BI**, **CFO / Finance Controllers** (`0_Inputs_Hypotheses` + live P&L/TCO/IFRS 16 + live 5-Col Budget & EMV formulas!) |
+| **`deliverables/PMO_CoPil_Executive_Deck.pptx`** | Native 7-Slide 16:9 PowerPoint Deck (`.pptx`) | **Microsoft PowerPoint**, **Google Slides**, **Keynote** (ready to project in ComEx / CoPil!) |
+| **`deliverables/PMO_CoPil_Executive_Report.docx`** | Native Word Executive Report (`.docx`) | **Microsoft Word**, **Google Docs**, **LibreOffice Writer** |
+| **`exports/space_plan_macro_micro.dxf`** + **`.svg`** | AutoCAD R12 ASCII `.dxf` + Scaled `.svg` + Audit JSON | **AutoCAD**, **AutoCAD LT**, **Autodesk DWG TrueView**, **LibreCAD**, **QCAD**, **Revit import** (10 architectural layers: Macro Zones + Micro-Zoning Desks/Offices/Meetings/PMR 1.50m circles) |
 | **`exports/milestones_calendar.ics`** | RFC 5545 iCalendar (`.ics`) | **Microsoft Outlook**, **Microsoft Teams**, **Google Calendar**, **Apple Calendar** (1-click deadline import) |
 | **`exports/jira_asana_monday_import.csv`** | UTF-8-BOM Issue/Task CSV | **Jira**, **Asana**, **Monday.com**, **Linear**, **Notion**, **Trello** |
 | **`exports/*.csv`** (`6` domain CSVs) | UTF-8-BOM CSV (Excel FR/US accent-safe) | **Power BI**, **Tableau**, **SAP/ERP Flat Import**, **Excel**, **Google Sheets (`gsheets`)** |

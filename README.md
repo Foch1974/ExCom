@@ -2,11 +2,11 @@
   <img src="assets/logo.svg" width="96" height="96" alt="ExCom Logo" />
 </p>
 
-<h1 align="center">ExCom v3.3</h1>
+<h1 align="center">ExCom v3.4</h1>
 
 <p align="center">
   <strong>Vertical 25-Role Executive, 360° Enterprise PMO &amp; Aeronautical « Zero-Amnesia » Operating System</strong><br/>
-  Adaptive <strong>Methodology Selector</strong> (6 Standards) · Systematic <strong>Post-Milestone Multi-Agent Clean-Room Boards</strong> · 3-State Foundation Ceiling · Anti-Self-Certification <strong>Gate 0</strong> (<code>✅ / ⚠️ / ❌ / 🛑 STOP</code>) · 360° <strong>Q-C-D-R Control Tower</strong> (Hard Deadlines, 5-Col Budget/TMA/TCO, EMV Risks, HSE/Reserves Go-Live Gate, Contract Redlines) · Native <strong>MS Project XML / Excel .xlsx / iCal .ics / CSV</strong> Bidirectional Interchange.<br/>
+  Adaptive <strong>Methodology Selector</strong> (6 Standards) · Systematic <strong>Post-Milestone Multi-Agent Clean-Room Boards</strong> · 3-State Foundation Ceiling · Anti-Self-Certification <strong>Gate 0</strong> (<code>✅ / ⚠️ / ❌ / 🛑 STOP</code>) · 360° <strong>Q-C-D-R Control Tower</strong> · Native <strong>MS Project .xml · 9-Tab Live-Formula Excel .xlsx (P&amp;L/TCO/IFRS 16) · PowerPoint .pptx · Word .docx · AutoCAD Macro+Micro .dxf/.svg · Outlook .ics · CSV</strong> Interchange.<br/>
   Built on the open <code>SKILL.md</code> standard — compatible with <strong>Google Antigravity</strong>, <strong>Claude Code</strong>, <strong>OpenAI Codex</strong>, <strong>Cursor</strong>, and <strong>Gemini CLI</strong>.
 </p>
 
@@ -47,17 +47,18 @@ flowchart TD
 
 ---
 
-## The 5 Deterministic Engines (`skills/excom/scripts/`)
+## The 6 Deterministic Engines (`skills/excom/scripts/`)
 
 Zero external `pip` dependencies (`Python 3.8+` standard library):
 
-| Script | Deterministic Guarantees Enforced (`v3.3`) |
+| Script | Deterministic Guarantees Enforced (`v3.4`) |
 | :--- | :--- |
 | **`porte0_carte_decideur.py`** | **Gate 0 Anti-Self-Certification Matrix**: Post-Milestone Clean-Room Board Gate, **3-State Foundation Ceiling** (`DEAD` / `SUB-SCALE` unlocking core redesign & blocking suicidal scaling / `VIABLE`), programmatic **`evidence_bindings`** (`--strict-bindings`), **Falsifiable Scoped Dead-Ends** (`ISOLATED_ABLATION` vs `CONFOUNDED_BUNDLE`, `reopen-dead-end`), Zero Mental Math (`ADD_03`), and **`🛑 STOP`** verdict. |
 | **`zero_oubli_runner.py`** | **Aeronautical Runner, KPI Trajectory, Multi-Agent Clean-Room Certifier & Lossless Anchor**: `Lot 0` ledger, **`record-kpi`** (default `EVERY_MAJOR_MILESTONE` Separation of Powers + Empirical RAG), **`record-clean-room`** (`100%` coverage + `--panel-auditors` + `--dissenting-vetoes`), **`install-hooks`** (`PreToolUse` firewall), AST *Zero-Fake-Twin*, `tree_sha256` gates, and **`render-anchor`** with `[STALE]` alerts. |
 | **`root_cause_guard.py`** | **Read-Only AST, Blind-Spot & Schema-Parity Scanner**: detects patchwork (denoised `entity_exceptions`, `hardcoded_exclusions`, `boolean_hotspots`, `magic_literals`, `fixed_caps`), **`silent_discards` (`_ = param`)**, **`frozen_state_latches`**, **`stacked_clamps_advisory`**, and **`schema-parity`** (test-mock keys absent from real data JSONs), plus `register-domain`, One-Way Ratchet, and `git diff` audit. |
 | **`excom_engine.py`** | **360° Enterprise Q-C-D-R Control Tower & Contagion Bus**: CPM + PERT `P85`, `FS/SS/FF/SF + Lag`, **Hard Target Deadline & Negative Float**, **5-Column Budget (`BAC -> TMA -> Revised -> Committed -> AC -> ETC -> EAC -> VAC`)**, Contingency vs Management Reserve, Multi-Year TCO & S-Curve, **Quantified Risk Register (`EMV`)**, **HSE/Compliance/Testing/Reserves Go-Live Gate**, **Contractual Negotiation & Suspensive Conditions Tracker**, RACI, Decision Log & Multi-View HTML Cockpit. |
-| **`excom_interop.py`** | **Adaptive Methodology Selector & Zero-Dependency Corporate Interchange**: deterministic 6-methodology router (`select-methodology`), native **MS Project XML (`MSPDI`)** export & import, pure-stdlib **7-Tab Excel (`.xlsx`)** workbook, **RFC 5545 iCalendar (`.ics`)**, UTF-8-BOM CSVs (incl. Jira/Asana/Monday) + bidirectional CSV import, and 1-click **`CoPil` Executive Brief**. |
+| **`excom_interop.py`** | **Adaptive Methodology Selector & Zero-Dependency Corporate Interchange**: deterministic 6-methodology router (`select-methodology`), native **MS Project XML (`MSPDI`)** export & import, pure-stdlib **9-Tab Live-Formula Excel (`.xlsx`)** workbook (`0_Inputs_Hypotheses` + `1_PnL_TCO_CashFlow` + IFRS 16 + live Budget/EMV formulas), **RFC 5545 iCalendar (`.ics`)**, UTF-8-BOM CSVs (incl. Jira/Asana/Monday) + bidirectional CSV import, and `CoPil` Markdown brief. |
+| **`excom_office_cad.py`** | **Native Office (`.pptx` / `.docx`) & AutoCAD (`.dxf` + `.svg`) Generator**: builds 7-slide 16:9 **PowerPoint `.pptx`** CoPil decks, native **Word `.docx`** steering reports, **AutoCAD R12 `.dxf` Macro + Micro-Zoning floorplans** (10 architectural layers: walls, macro zones, desk islands, enclosed offices, meeting rooms/booths, ERP egress, PMR 1.50m circles) + scaled `.svg` + AFNOR/ERP space compliance audit + **`audit-dxf`** external DXF area parser. |
 
 ---
 

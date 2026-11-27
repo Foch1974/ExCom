@@ -120,3 +120,13 @@ Use this template as the starting spec for `excom_engine.py init --project-dir <
   ]
 }
 ```
+
+---
+
+## 4. Parametric AutoCAD Macro & Micro-Zoning Space Planning (`.dxf` + `.svg` + Audit)
+
+Use `excom_engine.py generate-space-plan` for **MOA feasibility test-fits, landlord challenges, and internal client space workshops**:
+- **Macro-Zoning**: partitions floorplates into department zones (`OPEN_SPACE`, `PRIVATE_OFFICES`, `MEETING_HUB`, `RECEPTION`, `BREAKOUT`, `SERVER_CFA`) around an ERP-compliant egress corridor (`>= 1.40m` / `2 UP`).
+- **Micro-Zoning**: lays out exact metric benching desk islands (`1.60m × 0.80m`) + chairs + `1.60m` clearances, enclosed executive offices with `90°` door swings, conference rooms + tables + chairs, `1.30m` acoustic phone booths, server racks, and `Ø 1.50m` PMR wheelchair turning circles across **10 standard AutoCAD layers**.
+- **Honest MOA Boundary**: Ideal for feasibility test-fits, capacity checks (`AFNOR NF X 35-102 >= 10 m²/workstation`), and pre-architect briefs; execution construction drawings (`EXE` / `BIM Revit` / MEP clash detection / permit stamps) remain the legal scope of the licensed Architect & MOE.
+- **External Architect Audit**: Run `excom_engine.py audit-dxf --file <architect.dxf>` to verify bounding boxes, layer entity counts, and closed-polygon `m²` areas directly from external ASCII `.dxf` exports.

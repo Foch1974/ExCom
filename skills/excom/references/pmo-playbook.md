@@ -36,13 +36,18 @@ Core `spec.json` sections supported natively:
 - **Track HSE / Compliance / Reserves (`Go-Live Gate`)**: `excom_engine.py upsert-compliance --project-dir <dir> --id HSE-02 --requirement "ERP Safety Commission PV" --standard "ERP" --status WITH_RESERVES --test-completed --reserves "Smoke damper B2" --remediation-cost 18000 --remediation-delay 10`
 - **Track Contract Redlines & Suspensive Clauses**: `excom_engine.py upsert-contract --project-dir <dir> --id CTR-01 --contract-type "Commercial Lease" --counterparty "Landlord" --clause-topic "Art. 606 & DTA" --hse-linked --suspensive --deadline 2026-03-31 --exposure 350000 --status NEGOTIATING`
 - **Import External Updates**: `excom_engine.py import-msproject --project-dir <dir> --file updated.xml` or `import-csv --project-dir <dir> --file tracker.csv`
-- **1-Click Steering Committee (`CoPil`) Brief**: `excom_engine.py export-copil --project-dir <dir>`
+- **1-Click Steering Committee (`CoPil`) Pack (`.pptx` + `.docx` + `.md`)**: `excom_engine.py export-copil --project-dir <dir>`
+- **AutoCAD Macro & Micro-Zoning Space Plan (`.dxf` + `.svg` + Audit JSON)**: `excom_engine.py generate-space-plan --project-dir <dir> --spec <space_spec.json>`
+- **Audit External Architect `.dxf` Floorplans**: `excom_engine.py audit-dxf --file <architect_floorplan.dxf>`
 
 ---
 
-## Step 3 — Live Interactive & Corporate Surface Delivery
+## Step 3 — Live Interactive, Locked-Down IT & Corporate Surface Delivery
 
 Never leave deliverables behind dead `file:///.../*.html` chat links:
-1. **Local Multi-View Cockpit**: Launch `dashboard.html` directly in the OS default browser (`Start-Process "<path>/dashboard.html"` on Windows, `open` on macOS, `xdg-open` on Linux).
-2. **Market-Standard Corporate Exports (`exports/`)**: Hand off `control_tower_workbook.xlsx` (`7` Excel sheets), `schedule_msproject.xml` (MS Project / Primavera / Smartsheet / Monday), `milestones_calendar.ics` (Outlook / Google Calendar), and `jira_asana_monday_import.csv` directly to finance, legal, contractors, and internal teams.
-3. **Google Workspace Sync (`gsheets` / `gdocs` / `gslides`, when connected)**: Mirror `exports/` tables into Google Sheets and sync `deliverables/PMO_CoPil_Executive_Brief.md` into Google Docs/Slides with direct clickable `https://docs.google.com/...` links.
+1. **Locked-Down Corporate IT Protocol (*Zero Data Exfiltration*)**:
+   - **Preferred (Inside the Fence)**: Run ExCom's zero-dependency Python stdlib scripts offline on the corporate workstation once approved by IT/CISO (zero external `pip` packages, zero telemetry).
+   - **Anonymized Parametric Twin**: When authoring templates externally, NEVER enter real company names, addresses, landlords, employee names, or confidential quotes; use coded aliases (`Site_A`, `Landlord_X`) and the editable **`0_Inputs_Hypotheses`** Excel tab so real figures are entered strictly inside the corporate network and all live formulas recalculate automatically.
+2. **Local Multi-View Cockpit**: Launch `dashboard.html` directly in the OS default browser (`Start-Process "<path>/dashboard.html"` on Windows, `open` on macOS, `xdg-open` on Linux).
+3. **Market-Standard Corporate Exports (`exports/` & `deliverables/`)**: Hand off **`control_tower_workbook.xlsx`** (`9` live-formula Excel sheets incl. P&L/TCO/IFRS 16), **`PMO_CoPil_Executive_Deck.pptx`** (`7`-slide PowerPoint), **`PMO_CoPil_Executive_Report.docx`** (Word), **`schedule_msproject.xml`** (MS Project / Primavera / Smartsheet), **`milestones_calendar.ics`** (Outlook), **`space_plan_macro_micro.dxf`** + **`.svg`** (AutoCAD / DWG TrueView), and **`jira_asana_monday_import.csv`**.
+4. **Google Workspace Sync (`gsheets` / `gdocs` / `gslides`, when connected)**: Mirror `exports/` tables into Google Sheets and sync CoPil briefs into Google Docs/Slides with direct clickable `https://docs.google.com/...` links.
